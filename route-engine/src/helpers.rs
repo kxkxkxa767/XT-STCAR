@@ -49,7 +49,7 @@ pub const TURN_LATERAL_MARGIN_M: f64 = SIDE_BODY_EXTENT_M + MANEUVER_BODY_CLEARA
 // steer_calibration
 pub const STEER_PLAY_PWM: i64 = 40;
 pub fn nominal_right_limit_pwm() -> i64 {
-    NEUTRAL + ceil(-1.2 * 160.)
+    SERVO_MIN
 }
 
 // maneuver_sequence (module level)

@@ -6,8 +6,8 @@ use crate::dict;
 use crate::helpers::{NEUTRAL, SCAN_AGE_S};
 use crate::py::V;
 
-pub const LIGHT_BRAKE_MOTOR: i64 = 1300;
-pub const LIGHT_BRAKE_RESPONSE_S: f64 = 0.1;
+pub const LIGHT_BRAKE_MOTOR: i64 = 1100;
+pub const LIGHT_BRAKE_RESPONSE_S: f64 = 0.085;
 /// y79 position + calibrated IMU fit, 2026-11-11. Separate stages: the
 /// continuous brake's deceleration falls with speed, b(v) = base + rate*v.
 /// The measured coast drag replaces y79's floor contribution each run. These
@@ -17,11 +17,11 @@ pub struct BrakeModel { base: f64, rate: f64, travel_correction_s: f64 }
 
 impl BrakeModel {
     pub fn light(axis_cos: f64, coast_decel: f64) -> Self {
-        Self { base: coast_decel + (0.668863 - 0.5761712726842791) * (1. + axis_cos.max(0.)) * 0.5,
-            rate: 0.315219, travel_correction_s: 0.15 }
+        Self { base: coast_decel + (1.1642 - 0.5761712726842791) * (1. + axis_cos.max(0.)) * 0.5,
+            rate: 1.4121, travel_correction_s: 0.0 }
     }
     pub fn finish(coast_decel: f64) -> Self {
-        Self { base: coast_decel + (0.583426 - 0.5761712726842791), rate: 0.378253, travel_correction_s: -0.05 }
+        Self { base: coast_decel + (1.1642 - 0.5761712726842791), rate: 1.4121, travel_correction_s: 0.0 }
     }
     pub fn distance(self, speed: f64) -> f64 {
         let v = speed.max(0.);
@@ -32,18 +32,18 @@ impl BrakeModel {
         let a = acceleration.min(0.);
         let response = if a < 0. { LIGHT_BRAKE_RESPONSE_S.min(speed.max(0.) / -a) } else { LIGHT_BRAKE_RESPONSE_S };
         let release = (speed + a*response).max(0.);
-        // y94: command-to-stop travel residual against the speed actually
-        // available to this controller. Median prior-run residual / speed:
-        // light +0.154s, finish -0.048s (y90 variants + y92); y93 held out.
+        // Command-to-stop travel residual for the speed seen by this controller.
+        // Finish -0.048 s (y90 variants + y92); the continuous lamp brake uses the raw travel.
         // This corrects prediction distance, not an actuator delay or a wait.
         // It keeps the physical response and continuous-brake state unchanged.
         ((speed + release)*response*0.5 + self.distance(release)
             + speed.max(0.) * self.travel_correction_s).max(0.)
     }
-    fn decel(self, speed: f64) -> f64 { self.base + self.rate*speed.max(0.) }
+    pub(crate) fn decel(self, speed: f64) -> f64 { self.base + self.rate*speed.max(0.) }
 }
 // Same rest criterion as maneuver_light::LIGHT_RESTART_MPS.
 const STOP_SPEED_MPS: f64 = 0.15;
+pub(crate) const BRAKE_REST_MPS: f64 = 0.04;
 // Observation-fusion response, not a calibrated braking parameter. Verify
 // against fixed recorded inputs; stopping targets and brake rates stay separate.
 const GAP_FUSION_RESPONSE_S: f64 = 0.2;
@@ -64,11 +64,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn measured_travel_residual_advances_light_braking_but_delays_finish_braking() {
+    fn fresh_finish_board_speed_preserves_the_brake_during_an_imu_dip() {
+        let mut raw = LightBrake::default();
+        raw.observe(10., Some(1.12), Some(1.36), Some(4.), 1., 0.61, BrakeModel::finish(0.61), 0.25);
+        raw.state = BrakeState::Active { since: 9.6 };
+        let mut measured = raw.clone();
+        measured.observe_range_speed(10., Some(1.34), &[(2., 10., 1.12)], 0.61, BrakeModel::finish(0.61));
+        assert!(raw.control_speed(10.06, Some(3.45)).unwrap() < 1.);
+        assert_eq!(measured.command(10.06, Some(3.45)), Some(LIGHT_BRAKE_MOTOR));
+        measured.observe(10.1, Some(1.), Some(1.1), Some(3.45), 1., 0.61, BrakeModel::finish(0.61), 0.25);
+        assert!((measured.control_speed(10.12, Some(3.25)).unwrap() - 0.9).abs() < 1e-9);
+    }
+
+    #[test]
+    fn continuous_lamp_brake_uses_physical_travel_and_finish_keeps_its_range_correction() {
         let light_model = BrakeModel::light(1., 0.6081911341424501);
         let finish_model = BrakeModel::finish(0.6081911341424501);
         for (model, gap, speed, target, corrected_command, original_command) in [
-            (light_model, 1.9, 1.52, 0.55, Some(1300), None),
+            (light_model, 1.9, 1.52, 0.55, None, None),
+            (light_model, 1.65, 1.52, 0.55, Some(1300), Some(1300)),
             (finish_model, 2.45, 2.114, 0.25, None, Some(1300)),
         ] {
             let mut corrected = LightBrake::default();
@@ -114,7 +128,10 @@ mod tests {
         brake.observe(1.42, Some(0.82), Some(0.6), Some(-0.4), 1., 0.6, BrakeModel { base: 1., rate: 0., travel_correction_s: 0. }, 0.55);
         assert_eq!(brake.command(1.42, Some(-0.4)), Some(1300));
         brake.observe(1.8, Some(0.57), Some(0.1), Some(-0.9), 1., 0.6, BrakeModel { base: 1., rate: 0., travel_correction_s: 0. }, 0.55);
-        assert_eq!(brake.command(1.8, Some(-0.9)), Some(1500));
+        assert_eq!(brake.command(1.8, Some(-0.9)), Some(1300));
+        brake.observe(1.9, Some(0.56), Some(0.), Some(-1.), 1., 0.6, BrakeModel::light(1., 0.6), 0.55);
+        assert_eq!(brake.command(1.9, Some(-1.)), Some(1300));
+        assert_eq!(brake.command(2.02, Some(-1.)), Some(1500));
         assert!(brake.is_used());
         brake.observe(1.9, Some(0.8), Some(1.), Some(0.), 1., 0.6, BrakeModel { base: 1., rate: 0., travel_correction_s: 0. }, 0.55);
         assert_eq!(brake.command(1.9, Some(0.)), None);
@@ -132,9 +149,8 @@ mod tests {
     }
 
     #[test]
-    fn finish_brake_releases_early_when_holding_would_stop_outside_zone_and_coast_stays_safe() {
+    fn finish_brake_continues_until_rest_even_if_coasting_would_reach_the_zone() {
         let mut brake = LightBrake::default();
-        brake.set_release_over_gap(Some(0.40));
         let model = BrakeModel::finish(0.60);
         // Trigger brake at 1.0s with overestimated speed (2.15 m/s at 2.38 m, like y112).
         brake.observe(1.0, Some(2.38), Some(2.15), Some(0.), 1., 0.60, model, 0.25);
@@ -144,17 +160,55 @@ mod tests {
         assert_eq!(brake.command(1.2, Some(-0.5)), Some(LIGHT_BRAKE_MOTOR));
         // At 1.65s (like y112 t=27.51): gap=1.312, speed=1.133 -> brake_stop~0.58 > 0.40, release_stop~0.27 >= 0.25.
         brake.observe(1.65, Some(1.312), Some(1.133), Some(-1.02), 1., 0.60, model, 0.25);
-        assert_eq!(brake.command(1.65, Some(-1.02)), Some(NEUTRAL));
+        assert_eq!(brake.command(1.65, Some(-1.02)), Some(LIGHT_BRAKE_MOTOR));
+        for t in [2.7, 2.82] {
+            brake.observe(t, Some(0.32), Some(0.), Some(-2.1), 1., 0.60, model, 0.25);
+            let motor = brake.command(t, Some(-2.1));
+            assert_eq!(motor, Some(if t < 2.8 { LIGHT_BRAKE_MOTOR } else { NEUTRAL }));
+        }
+        brake.resume_after_forward(Some(NEUTRAL), Some(0.5));
         assert!(brake.is_used());
-        assert_eq!(brake.end_reason, Some("coast_reaches_zone"));
-        // Never brakes a second time after release.
-        assert_eq!(brake.command(1.70, Some(-1.05)), None);
+        assert_eq!(brake.command(2.85, Some(-2.1)), None);
+    }
+
+    #[test]
+    fn corrective_brake_needs_forward_ack_and_motion_after_the_previous_stop() {
+        let mut brake = LightBrake::default();
+        brake.begin_stop(1.);
+        brake.output_observed(NEUTRAL);
+        for (pwm, speed) in [(1500, 0.25), (1300, 0.25), (1560, 0.)] {
+            brake.resume_after_forward(Some(pwm), Some(speed));
+            brake.begin_stop(2.);
+            assert!(brake.is_used());
+        }
+        brake.resume_after_forward(Some(1560), Some(0.25));
+        assert!(brake.has_braked());
+        brake.begin_stop(2.2);
+        assert_eq!(brake.command(2.2, None), Some(LIGHT_BRAKE_MOTOR));
+    }
+
+    #[test]
+    fn measured_lamp_motion_outlasts_a_zero_imu_estimate() {
+        let model = BrakeModel::light(1., 0.6);
+        let mut brake = LightBrake::default();
+        brake.begin_stop(19.9);
+        for at in [20.0, 20.1, 20.2] {
+            let history = [(at-10.2, at-0.2, 0.76), (at-10., at, 0.65)];
+            brake.observe_range_speed(at, Some(0.55), &history, 0.60, model);
+            brake.observe(at, Some(0.65), Some(0.), Some(0.), 1., 0.60, model, 0.55);
+            assert!(brake.control_speed(at, Some(0.)).unwrap() > 0.40);
+            assert_eq!(brake.command(at, Some(0.)), Some(LIGHT_BRAKE_MOTOR));
+        }
+        for at in [20.3, 20.42] {
+            brake.observe_range_speed(at, Some(0.), &[(at-10., at, 0.55)], 0.60, model);
+            brake.observe(at, Some(0.55), Some(0.), Some(0.), 1., 0.60, model, 0.55);
+            assert_eq!(brake.command(at, Some(0.)), Some(if at < 20.4 { LIGHT_BRAKE_MOTOR } else { NEUTRAL }));
+        }
     }
 
     #[test]
     fn finish_brake_keeps_braking_when_releasing_would_overshoot_target() {
         let mut brake = LightBrake::default();
-        brake.set_release_over_gap(Some(0.40));
         let model = BrakeModel::finish(0.60);
         brake.observe(1.0, Some(2.38), Some(2.15), Some(0.), 1., 0.60, model, 0.25);
         assert_eq!(brake.command(1.0, Some(0.)), Some(LIGHT_BRAKE_MOTOR));
@@ -210,8 +264,9 @@ pub struct LightBrake {
     end_reason: Option<&'static str>,
     gap_fusion: Option<GapFusion>,
     gap_reference_reset: bool,
-    release_over_gap: Option<f64>,
-    require_coast_in_zone: bool,
+    rest_since: Option<f64>,
+    // A timestamped closing-rate measurement on the same straight as the brake.
+    range_speed: Option<(f64, f64)>,
 }
 
 impl LightBrake {
@@ -221,19 +276,35 @@ impl LightBrake {
         self.gap_reference_reset = true;
     }
 
-    /// If holding 1300 would stop with the rear outside the zone, release once
-    /// coasting still stops before the target. The light uses its surveyed beam
-    /// only with corroborating field localization.
-    pub fn set_release_over_gap(&mut self, max_gap: Option<f64>) {
-        self.release_over_gap = max_gap.filter(|v| v.is_finite() && *v > 0.);
-        self.require_coast_in_zone = false;
+    /// Move a board's measured closing rate from the middle of its scan
+    /// window to the current control tick. Missing ranges retire this sample.
+    pub(crate) fn observe_range_speed(&mut self, now: f64, raw: Option<f64>,
+        history: &[(f64, f64, f64)], coast_decel: f64, model: BrakeModel) -> Option<f64> {
+        let projected = raw.zip(history.first().zip(history.last())).and_then(|(speed, (first, last))| {
+            let delivery_age = now - last.1;
+            if !(0. ..=SCAN_AGE_S).contains(&delivery_age) { return None; }
+            let age = delivery_age + (last.0 - first.0) * 0.5;
+            let decel = if self.is_active() { model.decel(speed) } else { coast_decel };
+            Some((speed - decel * age).max(0.))
+        });
+        self.range_speed = projected.map(|v| (now, v));
+        projected
     }
 
-    /// A lamp stop has one brake application. Release it to coast only if
-    /// that coast itself is projected to put the entire car beyond the beam.
-    pub fn set_surveyed_release_zone(&mut self, max_gap: Option<f64>) {
-        self.set_release_over_gap(max_gap);
-        self.require_coast_in_zone = true;
+    /// A forward ACK and measured motion establish a new approach after a
+    /// corrective pull-up. Neutral or a delayed brake ACK cannot rearm it.
+    pub fn resume_after_forward(&mut self, applied: Option<i64>, speed: Option<f64>) {
+        if self.is_used() && applied.is_some_and(|pwm| pwm > NEUTRAL)
+            && speed.is_some_and(|v| v >= STOP_SPEED_MPS) {
+            *self = Self { started_at: self.started_at, ..Self::default() };
+        }
+    }
+
+    pub fn begin_stop(&mut self, now: f64) {
+        if matches!(self.state, BrakeState::Ready) {
+            self.state = BrakeState::Active { since: now };
+            self.started_at = Some(now);
+        }
     }
 
     /// Observe once per new scan. All distances, speeds and decelerations are
@@ -269,6 +340,11 @@ impl LightBrake {
         let response_accel = self.anchor.filter(|old| 0. < now-old.at && now-old.at <= SCAN_AGE_S)
             .and_then(|old| old.integral.zip(integral).map(|(before,current)|
                 ((current-before)/(now-old.at)*axis_cos.max(0.)).min(0.))).unwrap_or(0.);
+        // A forward hold cannot produce a multi-g impulse. An available
+        // range-rate on the same straight bounds the IMU tail before braking.
+        let response_accel = if !self.is_active() && self.range_speed.is_some_and(|(at, _)| at == now) {
+            response_accel.max(-coast_decel)
+        } else { response_accel };
         let prediction = self.anchor.filter(|old| {
             !reset && (0. ..=SCAN_AGE_S).contains(&(now-old.at)) && old.axis_cos >= MIN_AXIS_COS
         }).and_then(|old| {
@@ -309,6 +385,12 @@ impl LightBrake {
         let change = anchor.integral.zip(forward_integral.filter(|v| v.is_finite()))
             .map(|(start, current)| (current - start) * anchor.axis_cos);
         let speed = (anchor.speed + change.unwrap_or(0.)).max(0.);
+        // Preserve the independent closing rate across a brief IMU impulse.
+        let speed = if let Some((at, range_speed)) = self.range_speed
+            && at == anchor.at
+        {
+            speed.max(range_speed - anchor.brake.decel(range_speed) * age)
+        } else { speed };
         let gap = anchor.gap - (anchor.speed + speed) * age * 0.5;
         let coast_stop = gap - speed * speed / (2. * anchor.coast_decel);
         let brake_stop = gap - anchor.brake.stop_travel(speed, anchor.response_accel);
@@ -332,29 +414,15 @@ impl LightBrake {
         match self.state {
             BrakeState::Used => None,
             BrakeState::Active { since } => {
-                let target = self.anchor.map_or(0., |a| a.target);
-                let release = self.projection.and_then(|p| {
-                    if now - since < LIGHT_BRAKE_RESPONSE_S {
-                        return None;
-                    }
-                    if p.speed < STOP_SPEED_MPS {
-                        return Some("stopped");
-                    }
-                    if now - since >= LIGHT_BRAKE_RESPONSE_S + 0.2
-                        && self.release_over_gap.is_some_and(|max_gap| {
-                            p.brake_stop > max_gap
-                                && p.release_stop >= target
-                                && (!self.require_coast_in_zone || p.release_stop <= max_gap)
-                        })
-                    {
-                        return Some("coast_reaches_zone");
-                    }
-                    None
-                });
-                if let Some(reason) = release {
+                let early_glide = now - since >= 0.20
+                    && self.projection.is_some_and(|p| p.speed <= 0.16 && p.release_stop >= 0.09);
+                let still = self.projection.is_some_and(|p| p.speed <= BRAKE_REST_MPS);
+                if !still { self.rest_since = None; }
+                if early_glide || (still && now - since >= LIGHT_BRAKE_RESPONSE_S
+                    && now - *self.rest_since.get_or_insert(now) >= LIGHT_BRAKE_RESPONSE_S) {
                     self.state = BrakeState::Used;
                     self.ended_at = Some(now);
-                    self.end_reason = Some(reason);
+                    self.end_reason = Some("stopped");
                     Some(NEUTRAL)
                 } else {
                     // Missing speed does not insert a neutral pulse between
@@ -370,8 +438,7 @@ impl LightBrake {
                     && projected.coast_stop < target
                     && projected.brake_stop <= target
                 {
-                    self.state = BrakeState::Active { since: now };
-                    self.started_at = Some(now);
+                    self.begin_stop(now);
                     Some(LIGHT_BRAKE_MOTOR)
                 } else {
                     None
@@ -380,12 +447,29 @@ impl LightBrake {
         }
     }
 
+    pub fn has_braked(&self) -> bool { self.started_at.is_some() }
+
     pub fn is_active(&self) -> bool {
         matches!(self.state, BrakeState::Active { .. })
     }
 
     pub fn is_used(&self) -> bool {
         matches!(self.state, BrakeState::Used)
+    }
+
+    /// Release an active brake immediately once independent measurements confirm
+    /// the vehicle has come to physical rest, avoiding ~0.2-0.4 s of extra dead hold.
+    pub fn release_at_rest(&mut self, now: f64) -> bool {
+        if let BrakeState::Active { since } = self.state
+            && now - since >= 0.20
+        {
+            self.state = BrakeState::Used;
+            self.ended_at = Some(now);
+            self.end_reason = Some("stopped");
+            true
+        } else {
+            false
+        }
     }
 
 

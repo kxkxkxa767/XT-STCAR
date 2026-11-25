@@ -12,8 +12,9 @@ use crate::dict;
 // crawled at 1550: first pass to tangent 3.3-3.8 s against y27's 2.0.
 // y93: partial speed restoration after y92, selected by paired radius/speed
 // comparisons. The1620 boost still belongs to the straight transfer.
-const ENTRY_MPS: f64 = 1.75;
-const BEND_MOTOR: i64 = 1560;
+const OPEN_ENTRY_MPS: f64 = 1.86;
+// Keep the existing interpolation for the narrow passage by the second cone.
+const NARROW_ENTRY_MAX_MPS: f64 = 1.76;
 // Rule-range simulation (wide lanes): the passage between cone two and the start divider's top,
 // measured by the free-space probe, was the strongest predictor of contact. Below .9 m the car
 // has under 60 cm of play, and the 1.8 m/s tangent runs wide. The practice field measures .85 or more.
@@ -24,15 +25,15 @@ const TIGHT_ENTRY_MPS: f64 = 1.1;
 /// Cone two's entry speed for this passage on the board side.
 pub fn passage_entry_mps(passage: f64) -> Option<f64> {
     (passage < PASSAGE_FULL_M).then(|| {
-        TIGHT_ENTRY_MPS + (ENTRY_MPS - TIGHT_ENTRY_MPS) * ((passage - PASSAGE_TIGHT_M) / (PASSAGE_FULL_M - PASSAGE_TIGHT_M)).clamp(0., 1.)
+        TIGHT_ENTRY_MPS + (NARROW_ENTRY_MAX_MPS - TIGHT_ENTRY_MPS) * ((passage - PASSAGE_TIGHT_M) / (PASSAGE_FULL_M - PASSAGE_TIGHT_M)).clamp(0., 1.)
     })
 }
 const ROLLING_MPS: f64 = 0.15;
-const STRAIGHT_YAW_RAD_S: f64 = 0.6;
-const STRAIGHT_STEER_BAND_PWM: i64 = 60;
+const STRAIGHT_YAW_RAD_S: f64 = 0.65;
+const STRAIGHT_STEER_BAND_PWM: i64 = 65;
 // y76/y77: after the cut the IMU speed peaked in 0.092/0.056 s and gained
 // 0.183/0.148 m/s, not the old fixed 4 * 0.2 = 0.8 m/s prediction.
-const BOOST_CUT_RESPONSE_S: f64 = 0.1;
+const BOOST_CUT_RESPONSE_S: f64 = 0.09;
 
 #[derive(Clone, Copy, Debug)]
 struct DriveAnchor {
@@ -74,6 +75,7 @@ pub struct RaceTransfer {
     previous_integral: Option<(f64, f64)>,
     drive_anchor: Option<DriveAnchor>,
     control: Option<TransferControl>,
+    brake_used: bool,
     /// The channel's board as last identified (lateral, metres).
     pub channel_board: Option<f64>,
     /// Cone two's entry speed when the passage on its board side is narrow.
@@ -85,6 +87,7 @@ enum TransferPhase {
     #[default]
     Approach,
     Boost(f64),
+    Brake(f64),
     Coast,
     Bend,
 }
@@ -116,11 +119,25 @@ impl RaceTransfer {
     /// vehicle is still moving. Keep measurements and steering alive, but do
     /// not reapply power until the support is back in view or confirmed.
     pub fn coast_for_support(&mut self) {
+        if matches!(self.phase, TransferPhase::Brake(_)) {
+            self.brake_used = true;
+        }
         if !self.waiting_for_support {
             self.phase_before_wait = Some(self.phase);
         }
         self.waiting_for_support = true;
         self.phase = TransferPhase::Coast;
+    }
+
+    pub fn is_braking(&self) -> bool { matches!(self.phase, TransferPhase::Brake(_)) }
+
+    pub fn has_braked(&self) -> bool { self.brake_used }
+
+    pub fn output_observed(&mut self, motor: i64) {
+        if matches!(self.phase, TransferPhase::Brake(_)) && motor != LANE_BRAKE_MOTOR {
+            self.brake_used = true;
+            self.phase = TransferPhase::Bend;
+        }
     }
 
     pub fn waiting_for_support(&self) -> bool { self.waiting_for_support }
@@ -138,7 +155,7 @@ impl RaceTransfer {
     /// seq 132 to 138, cutting the tangent speed to 1.48 m/s (y67: 1.77).
     pub fn support_handed_over(&mut self) {
         self.waiting_for_support = false;
-        if let Some(phase) = self.phase_before_wait.take().filter(|p| !matches!(p, TransferPhase::Boost(_))) {
+        if let Some(phase) = self.phase_before_wait.take().filter(|p| !matches!(p, TransferPhase::Boost(_) | TransferPhase::Brake(_))) {
             self.phase = phase;
         }
     }
@@ -174,7 +191,7 @@ impl RaceTransfer {
             .map(|((at, before), current)| ((current - before) / (now - at)).max(0.))
             .unwrap_or(4.0);
         if let Some(current) = integral { self.previous_integral = Some((now, current)); }
-        let entry_mps = self.tight_entry.unwrap_or(ENTRY_MPS);
+        let entry_mps = self.tight_entry.unwrap_or(OPEN_ENTRY_MPS);
         let before_tangent = distance.is_some_and(|d| d > 0.);
         let hold_motor = if continuing || before_tangent { hold_pwm(cut_speed, entry_mps) } else { RACE_CRUISE_MOTOR };
         let hold_accel = surface.predicted_hold_accel(hold_motor, cone_speed.or(body_speed), now)
@@ -206,17 +223,25 @@ impl RaceTransfer {
     fn coast_budget(&self, now: f64, speed: Option<f64>, a: DriveAnchor) -> Option<f64> {
         speed.map(|v| {
             let (lag, acceleration) = match self.phase {
-                TransferPhase::Boost(since) => (BOOST_CUT_RESPONSE_S,
-                    if now - since <= BOOST_CUT_RESPONSE_S { 4.0 } else { a.acceleration }),
-                TransferPhase::Approach => (ESC_COAST_DELAY_S, a.hold_accel),
+                TransferPhase::Boost(since) => (0.056,
+                    if now - since <= BOOST_CUT_RESPONSE_S { 5.05 } else { a.acceleration }),
+                TransferPhase::Approach => (0.056, a.hold_accel),
                 _ => (0., 0.),
             };
             let release = v + acceleration * lag;
-            (v + release) * lag / 2. + (release * release - a.entry_mps * a.entry_mps).max(0.) / (2. * a.decel)
+            if !self.brake_used && matches!(self.phase, TransferPhase::Approach | TransferPhase::Boost(_)) {
+                let model = crate::race_light_brake::BrakeModel::light(1.0, a.decel);
+                (v + release) * lag / 2.
+                    + release * crate::race_light_brake::LIGHT_BRAKE_RESPONSE_S
+                    + (model.distance(release) - model.distance(a.entry_mps)).max(0.)
+                    + 0.30
+            } else {
+                (v + release) * lag / 2. + (release * release - a.entry_mps * a.entry_mps).max(0.) / (2. * a.decel)
+            }
         })
     }
 
-    /// Re-evaluate the one boost/cut on the existing 20 ms tick. A fresh scan
+    /// Re-evaluate the one boost/brake/cut on the existing 20 ms tick. A fresh scan
     /// still owns geometry; the IMU transports speed and distance between scans.
     pub fn command(&mut self, now: f64, integral: Option<f64>) -> Option<i64> {
         let a = self.drive_anchor?;
@@ -226,29 +251,45 @@ impl RaceTransfer {
             .map_or(0., |(before, current)| current - before)).max(0.));
         let distance = a.distance.map(|d| (d - a.speed.zip(speed).map_or(0., |(old, v)| (old + v) * age / 2.)).max(0.));
         let coast = self.coast_budget(now, speed, a);
+        let boost_hit_cap = matches!(self.phase, TransferPhase::Boost(since) if now - since >= 0.36)
+            || speed.is_some_and(|v| v >= 2.62);
         if matches!(self.phase, TransferPhase::Boost(_))
             && (!a.continuing || !distance.zip(coast).is_some_and(|(d, c)| d > c)) {
-            self.phase = TransferPhase::Coast;
+            if !self.brake_used && !self.waiting_for_support
+                && speed.is_some_and(|v| v > a.entry_mps + 0.14)
+                && distance.is_some_and(|d| d > 0.02)
+            {
+                self.brake_used = true;
+                self.phase = TransferPhase::Brake(now);
+            } else {
+                self.phase = TransferPhase::Coast;
+            }
+        }
+        if let TransferPhase::Brake(since) = self.phase {
+            if self.waiting_for_support
+                || speed.is_none_or(|v| v <= a.entry_mps + 0.30)
+                || now - since >= 0.38
+                || (distance.is_some_and(|d| d <= 0.05) && speed.is_none_or(|v| v <= a.entry_mps + 0.34))
+            {
+                self.phase = if self.waiting_for_support { TransferPhase::Coast } else { TransferPhase::Bend };
+                self.transfer_anchor = None;
+            }
         }
         if !self.waiting_for_support && matches!(self.phase, TransferPhase::Coast) && speed.is_none_or(|v| v <= a.entry_mps) {
             self.phase = TransferPhase::Bend;
             self.transfer_anchor = None;
         }
         let motor = if self.waiting_for_support { NEUTRAL } else { match self.phase {
-            TransferPhase::Boost(_) => TRANSFER_BOOST_MOTOR,
+            TransferPhase::Boost(_) => if boost_hit_cap { RACE_CRUISE_MOTOR } else { TRANSFER_BOOST_MOTOR },
+            TransferPhase::Brake(_) => LANE_BRAKE_MOTOR,
+            TransferPhase::Coast if distance.is_some() && speed.is_some() && self.tight_entry.is_none() => {
+                if speed.is_some_and(|v|v>a.entry_mps+LANE_SPEED_HOLD_MARGIN_MPS) {ROLLING_HOLD_MOTOR} else {ROUTE_SLOW_MOTOR}
+            }
             TransferPhase::Coast => NEUTRAL,
-            // User 11-04 (open PWM steps): out of cone one and straight again, hold toward the
-            // cone-two entry speed instead of 1550 (y53: 1550 at 1.29-1.41 m/s for .5 s).
             TransferPhase::Approach if a.continuing || distance.is_some_and(|d| d > 0.) => hold_pwm(speed, a.entry_mps),
-            // Cutting the boost does not mean the physical bend has begun:
-            // y77 still had over 2 m to travel when the old state fixed 1550.
-            // Steering eligibility ends the boost, not the approach speed hold.
-            // y86 resumed 1570 with 1.28 m still to its tangent because a heading
-            // correction made continuing=false. The geometric tangent owns
-            // this handover, even while correcting the approach heading.
             TransferPhase::Bend if distance.is_some_and(|d| d > 0.) => hold_pwm(speed, a.entry_mps),
             _ if self.tight_entry.is_some_and(|e| speed.is_some_and(|v| v > e)) => NEUTRAL,
-            TransferPhase::Bend => BEND_MOTOR,
+            TransferPhase::Bend => hold_pwm(speed, a.entry_mps.min(2.05)),
             _ => RACE_CRUISE_MOTOR,
         }};
         self.control = Some(TransferControl { at: now, speed, distance, coast, motor });
@@ -259,6 +300,7 @@ impl RaceTransfer {
         let (phase, since) = match self.phase {
             TransferPhase::Approach => ("approach", None),
             TransferPhase::Boost(since) => ("boost", Some(since)),
+            TransferPhase::Brake(since) => ("brake", Some(since)),
             TransferPhase::Coast => ("coast", None),
             TransferPhase::Bend => ("bend", None),
         };
@@ -289,13 +331,13 @@ mod tests {
         transfer.drive_anchor.as_mut().unwrap().continuing = true;
         assert_eq!(transfer.command(1., Some(0.)), Some(ROUTE_SLOW_MOTOR));
         transfer.drive_anchor.as_mut().unwrap().distance = Some(0.);
-        assert_eq!(transfer.command(1., Some(0.)), Some(BEND_MOTOR));
+        assert_eq!(transfer.command(1., Some(0.)), Some(hold_pwm(Some(2.06),1.8)));
         transfer.phase = TransferPhase::Coast;
         transfer.speed = Some(2.06);
         transfer.transfer_anchor = Some((1.75, 0.));
         let (motor, _) = transfer.drive(2., Some(1.28), false, false, 0.6, Some(0.), None,
             Some(2.16), &crate::race_surface::SurfaceResponse::default());
-        assert_eq!(motor, NEUTRAL, "fresh cone motion must not be replaced by the old low boost anchor");
+        assert_eq!(motor, ROLLING_HOLD_MOTOR, "fresh cone motion needs rolling deceleration rather than another boost");
     }
 
     #[test]
@@ -309,7 +351,7 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(transfer.command(1., Some(0.)), Some(TRANSFER_BOOST_MOTOR));
-        assert_eq!(transfer.command(1.06, Some(0.06)), Some(NEUTRAL));
+        assert_eq!(transfer.command(1.06, Some(0.06)), Some(ROLLING_HOLD_MOTOR));
         let (motor, _) = transfer.drive(1.2, Some(1.), false, true, 0.6, Some(-0.5), None,
             None,
             &crate::race_surface::SurfaceResponse::default());

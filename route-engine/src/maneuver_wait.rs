@@ -557,7 +557,7 @@ impl Maneuver {
 
     /// The chassis can still report the brake command while neutral is in flight.
     pub(crate) fn pause_brake_ack_expected(&self) -> bool {
-        self.light_brake_ack_expected() || (self.race_inputs.is_some()
+        self.crosswalk_brake_ack_expected() || self.light_brake_ack_expected() || (self.race_inputs.is_some()
             && self.light_motor_stage() && matches!(self.light_stop_state, Some("released" | "passed"))
             && (self.finish.race_brake.is_active() || self.finish.race_brake.is_used()))
     }
@@ -573,9 +573,10 @@ impl Maneuver {
         if self.transfer_stage() || self.light_motor_stage() {
             motors.push(NEUTRAL);
         }
-        if self.route_stage == "light_lane" || self.released_light_entry() || self.light_brake_ack_expected() {
+        if self.route_stage == "light_lane" || self.released_light_entry() || self.light_brake_ack_expected() || self.crosswalk_brake_ack_expected() {
             motors.push(LANE_BRAKE_MOTOR); // round y22: the finish brake
         }
+        if self.trim_ack_expected(){motors.push(crate::race_light::trim::TRIM_PWM);}
         motors.extend_from_slice(&DRIVE_MOTORS);
         let servo = if control.get("servo").is_none() { V::Int(0) } else { control.get("servo").clone() };
         if !self.continue_route
@@ -882,6 +883,7 @@ impl Maneuver {
         let mut motors = vec![NEUTRAL];
         motors.extend_from_slice(&DRIVE_MOTORS);
         if self.pause_brake_ack_expected() { motors.push(LANE_BRAKE_MOTOR); }
+        if self.trim_ack_expected(){motors.push(crate::race_light::trim::TRIM_PWM);}
         if (!py_eq(&servo_feedback, &V::from(self.quality_wait_servo)) && !pending_step) || !motor_in(control.get("motor"), &motors) {
             self.lock(&format!("route_{kind}_pause_feedback_changed"));
             return self.result(now);

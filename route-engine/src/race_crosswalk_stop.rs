@@ -18,6 +18,7 @@ pub(crate) const IMU_POWER_RESPONSE_S: f64 = 0.1;
 
 #[derive(Clone, Debug, Default)]
 pub struct CrosswalkStopPlan {
+    pub brake: crate::race_light_brake::LightBrake,
     /// Pure-Rust: (capture time less lag, front-to-edge m, pitch rad, gap-to-edge m, pitch source)
     direct_frames: Vec<(f64, f64, f64, Option<f64>, &'static str)>,
     /// the lidar's range to the board ahead on the still scans

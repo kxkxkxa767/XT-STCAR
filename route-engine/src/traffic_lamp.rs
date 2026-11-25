@@ -4,6 +4,10 @@
 #[path = "lamp_beads.rs"]
 mod lamp_beads;
 
+#[path = "race_lamp_housing.rs"]
+mod housing;
+pub(crate) use housing::lip as housing_lip;
+
 #[derive(Default)]
 pub struct Detector {
     beads: lamp_beads::Beads,

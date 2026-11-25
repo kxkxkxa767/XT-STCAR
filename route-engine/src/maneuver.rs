@@ -41,14 +41,15 @@ pub const ROUTE_SLOW_MOTOR: i64 = MIN_FORWARD_PWM;
 // controller and explicit speed holds retain their calibrated 1550 base.
 pub const RACE_CRUISE_MOTOR: i64 = 1570;
 // Round 100: the open start lane launches at 1600 (Python's comment).
-pub const START_LAUNCH_MOTOR: i64 = 1600;
-// Round y18: the launch after green in the light lane (round y20: 1600, the start lane's).
-pub const LIGHT_LAUNCH_MOTOR: i64 = 1600; // finish launch after a light release
+pub const START_LAUNCH_MOTOR: i64 = 1650;
+// The standing restart after the compulsory zebra stop has its own PWM.
+pub const CROSSWALK_LAUNCH_MOTOR: i64 = 1650;
+// Round y18: the launch after green in the light lane.
+pub const LIGHT_LAUNCH_MOTOR: i64 = 1650; // finish launch after a light release
 // Round y23: the straights' push (the start lane after the crosswalk, the transfer).
 pub const STRAIGHT_MOTOR: i64 = 1590;
-// y77: user-approved 1620 trial only in RaceTransfer's straight boost phase;
-// The straight boost remains separate from ordinary race cruise and speed holds.
-pub const TRANSFER_BOOST_MOTOR: i64 = 1620;
+// Boost for the straight transfer between the cones.
+pub const TRANSFER_BOOST_MOTOR: i64 = 1650;
 // User 11-04: 1550 from the crosswalk to cone one is slow (asked 1565-1580). Race only:
 // the approach holds 1570 up to the cone's tangent point; the loop keeps 1550.
 pub const FIRST_APPROACH_MOTOR: i64 = 1570;
@@ -58,10 +59,14 @@ pub const HOLD_PWM_MAX: i64 = 1590;
 pub const HOLD_PWM_PER_MPS: f64 = 60.;
 pub const HOLD_MOTORS: [i64; 7] = [1555, 1560, 1565, 1570, 1575, 1580, 1585];
 
-/// Race speed hold: 1550 at or above the target, more by the deficit (60 PWM per m/s), at most 1590.
+/// Race speed hold: feedforward + proportional PWM in [1550, 1590] (or 1600 only when clearly below target).
 pub fn hold_pwm(speed: Option<f64>, target: f64) -> i64 {
     let Some(v) = speed else { return ROUTE_SLOW_MOTOR };
-    let raw = ROUTE_SLOW_MOTOR as f64 + HOLD_PWM_PER_MPS * (target - v);
+    if v >= target + 0.04 {
+        return ROUTE_SLOW_MOTOR;
+    }
+    let ff = ROUTE_SLOW_MOTOR as f64 + 20. * (target - 1.50).max(0.);
+    let raw = ff + 80. * (target - v);
     let stepped = HOLD_PWM_STEP * (raw / HOLD_PWM_STEP as f64).round() as i64;
     stepped.clamp(ROUTE_SLOW_MOTOR, HOLD_PWM_MAX)
 }
@@ -69,10 +74,9 @@ pub fn hold_pwm(speed: Option<f64>, target: f64) -> i64 {
 pub const FINISH_HOLD_MOTOR: i64 = 1565;
 // User measured on 11-11: 1530 sustains an already moving car, but cannot launch it.
 pub const ROLLING_HOLD_MOTOR: i64 = 1530;
-pub const DRIVE_MOTORS: [i64; 14] = [
+pub const DRIVE_MOTORS: [i64; 15] = [
     TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR, STRAIGHT_MOTOR, TRANSFER_BOOST_MOTOR,
-    FIRST_APPROACH_MOTOR, FINISH_HOLD_MOTOR, ROLLING_HOLD_MOTOR, 1555, 1575, 1580, 1585,
-    START_LAUNCH_MOTOR + crate::race_crosswalk::APPROACH_PWM_ADD,
+    FIRST_APPROACH_MOTOR, FINISH_HOLD_MOTOR, ROLLING_HOLD_MOTOR, 1555, 1575, 1580, 1585, 1600, CROSSWALK_LAUNCH_MOTOR,
 ];
 pub const STRAIGHT_ACCEL_MAX_MPS2: f64 = 3.;
 pub const STRAIGHT_LAG_S: f64 = 0.3;
@@ -211,18 +215,18 @@ pub const START_LAUNCH_ACCEL_MPS2: f64 = 2.5;
 pub const LIGHT_LAUNCH_ACCEL_MAX_MPS2: f64 = 2.5;
 pub const LIGHT_LAUNCH_ACCEL_MPS2: f64 = 1.5;
 // Round y22: the finish brake after the light (once; the bridge takes 1000-2000).
-pub const LANE_BRAKE_MOTOR: i64 = 1300;
+pub const LANE_BRAKE_MOTOR: i64 = 1100;
 pub const LANE_BRAKE_START_GAP_M: f64 = 1.2;
 pub const LANE_BRAKE_MIN_MPS: f64 = 0.3;
 pub const LANE_BRAKE_MAX_S: f64 = 1.5;
 pub const START_LAUNCH_SETTLE_S: f64 = 0.3;
 pub const OPEN_LEFT_RADIUS_M: (f64, f64) = (0.90, 0.95);
 // User 11-04 (y46 at 2.04 m/s ran wide and hit cone one): race cone one plans a smaller circle.
-pub const FIRST_LOOP_RACE_RADIUS_M: (f64, f64) = (0.85, 0.90);
-pub const OPEN_RIGHT_RADIUS_M: (f64, f64) = (0.90, 1.40);
+pub const FIRST_LOOP_RACE_RADIUS_M: (f64, f64) = (0.76, 0.84);
+pub const OPEN_RIGHT_RADIUS_M: (f64, f64) = (0.86, 1.15);
 // y93: prefer a modestly wider second loop; plan_loop_prefer limits the
 // change to one radius-grid step beyond the same measured-space nominal.
-pub const SECOND_LOOP_RADIUS_PREFERENCE: f64 = 0.30;
+pub const SECOND_LOOP_RADIUS_PREFERENCE: f64 = 0.20;
 pub const OPEN_PROBE_QUANTUM_M: f64 = 0.05;
 pub const OPEN_PROBE_MAX_RATE_RAD_S: f64 = 0.6;
 pub const OPEN_SUPPORT_SKIP_M: f64 = 0.08;
@@ -378,7 +382,7 @@ pub const CROSSWALK_MOVED_M: f64 = 0.1;
 pub const CROSSWALK_ZONE_M: f64 = 1.;
 pub const CROSSWALK_WAIT_S: f64 = 3.;
 /// y68: race crosswalk wait with a margin over the rule's 3 s (user: 把这两处余量加回来).
-pub const CROSSWALK_RACE_WAIT_S: f64 = 3.1;
+pub const CROSSWALK_RACE_WAIT_S: f64 = 3.0;
 pub const CROSSWALK_STOP_MAX_S: f64 = 3.;
 pub const OPEN_SUPPORT_MAX_DEPTH_M: f64 = 0.15;
 
@@ -1343,6 +1347,21 @@ impl Maneuver {
 
     /// ManeuverSequence._result.
     pub fn result(&mut self, now: f64) -> V {
+        if self.lane_motor==crate::race_light::trim::TRIM_PWM && !self.race_light.trim.authorized(now) {self.lane_motor=NEUTRAL;}
+        if self.phase == "drive" && !self.quality_resume_pending && self.crosswalk_braking_stage()
+            && let Some(input) = self.race_inputs
+            && let Some(motor) = self.race_crosswalk_stop.brake.command(now, input.forward_integral) {
+            self._start_motor = motor;
+        }
+        if self.phase == "drive" && !self.quality_resume_pending
+            && ((self.route_stage == "start_lane" && self.crosswalk_state == Some("done"))
+                || self.first_approach_hold().is_some())
+            && let Some(input) = self.race_inputs
+            && let Some(motor) = self.race_crosswalk.command(now, input.forward_integral) {
+            if self.route_stage == "start_lane" {
+                self._start_motor = motor;
+            }
+        }
         if self.phase == "drive" && !self.quality_resume_pending && self.transfer_stage()
             && let Some(input) = self.race_inputs
             && let Some(motor) = self.race_transfer.command(now, input.forward_integral) {
@@ -1406,6 +1425,7 @@ impl Maneuver {
             result.set("surface_speed", self.race_surface_speed.diagnostics());
             result.set("field_localization", self.field_map.diagnostics(&self._current_scan));
             result.set("light_brake_control", self.race_light_brake.diagnostics());
+            if self.light_stop_state==Some("waiting") || self.race_light.trim.issued { result.set("light_position_trim",self.race_light.trim.diagnostics()); }
             if self.light_motor_stage() && matches!(self.light_stop_state, Some("released" | "passed")) {
                 result.set("finish_brake_control", self.finish.race_brake.diagnostics());
             }
@@ -1419,6 +1439,12 @@ impl Maneuver {
             // A pause must not leave a cached 1300 for its resume ACK tick.
             self.lane_motor = NEUTRAL;
         }
+        if self.race_crosswalk_stop.brake.is_active() && motor != LANE_BRAKE_MOTOR && self._start_motor == LANE_BRAKE_MOTOR {
+            self._start_motor = NEUTRAL;
+        }
+        self.race_crosswalk_stop.brake.output_observed(motor);
+        self.race_crosswalk.output_observed(motor);
+        self.race_transfer.output_observed(motor);
         self.race_light_brake.output_observed(motor);
         if self.finish.race_brake.is_active() && motor != LANE_BRAKE_MOTOR {
             self.finish.brake_since = None;
@@ -1429,9 +1455,7 @@ impl Maneuver {
         if DRIVE_MOTORS.contains(&motor) {
             self._power_cmd_at = Some(now);
             self._power_cmd_motor = Some(motor);
-            if motor == START_LAUNCH_MOTOR
-                || (self.race_inputs.is_some() && self.race_crosswalk.first_motor() == Some(motor)
-                    && motor == START_LAUNCH_MOTOR + crate::race_crosswalk::APPROACH_PWM_ADD) {
+            if self.is_lane_launch_motor(motor) {
                 self._launch_cmd_at = Some(now);
             }
         }
@@ -1578,6 +1602,12 @@ impl Maneuver {
         if self.race_inputs.is_some() { RACE_CRUISE_MOTOR } else { ROUTE_SLOW_MOTOR }
     }
 
+    pub(super) fn is_lane_launch_motor(&self, motor: i64) -> bool {
+        motor == START_LAUNCH_MOTOR || (motor == CROSSWALK_LAUNCH_MOTOR
+            && matches!(self.route_stage, "start_lane" | "first_target")
+            && self.race_crosswalk.first_motor() == Some(motor))
+    }
+
     /// _route_motor.
     pub fn route_motor(&self) -> i64 {
         let slow_stage = (self.handover_observed && self.route_stage == "first_target")
@@ -1601,12 +1631,11 @@ impl Maneuver {
                 || (self.light_entry_coast && self.route_stage == "light_entry") {
                 return NEUTRAL;
             }
-            // y80: 1570 in cone one's actual arc raised speed to 1.8-1.9 m/s;
-            // the existing left steering saturated and the car ran wide before
-            // the quality pause. Keep its proven 1550 arc, independently of the
-            // approach speed hold and the other stages' 1570 cruise.
             self.first_approach_hold().unwrap_or_else(|| {
-                if self.route_stage == "first_target" || (self.race_inputs.is_some() && self.route_stage == "light_entry") {
+                if self.route_stage=="first_target" && self.race_inputs.is_some()
+                    && self._current_scan.get("seq").oi().is_some_and(|s|self.open_loop.get("source_seq").oi()==Some(s)) {
+                    self.open_loop.get("arc_drive").get("motor").oi().unwrap_or(ROUTE_SLOW_MOTOR)
+                } else if self.route_stage == "first_target" {
                     ROUTE_SLOW_MOTOR
                 } else { self.cruise_motor() }
             })
@@ -1991,6 +2020,10 @@ impl Maneuver {
             return self.result(now);
         }
         if !advancing {
+            if self.race_program && self.race_light.trim.active() && self.light_stop_state==Some("waiting") {
+                self.light_wait(scan,now,control);
+                return self.result(now);
+            }
             let pending_match = self._second_plan_pending.as_ref().is_some_and(|(s, a)| {
                 py_eq(s, scan.get("seq")) && py_eq(a, scan.get("at_ms"))
             });

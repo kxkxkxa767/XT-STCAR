@@ -187,9 +187,10 @@ impl Maneuver {
             motors.push(NEUTRAL);
         }
         motors.extend_from_slice(&DRIVE_MOTORS);
-        if self.route_stage == "light_lane" || self.released_light_entry() || self.light_brake_ack_expected() {
+        if self.route_stage == "light_lane" || self.released_light_entry() || self.light_brake_ack_expected() || self.crosswalk_brake_ack_expected() {
             motors.push(LANE_BRAKE_MOTOR); // round y22: the finish brake
         }
+        if self.trim_ack_expected(){motors.push(crate::race_light::trim::TRIM_PWM);}
         let adopted = motor_in(control.get("motor"), &motors)
             && eq_i(control.get("servo"), self.servo)
             && control.get("command_acked").is_true();
@@ -212,7 +213,7 @@ impl Maneuver {
             && (motor_in(control.get("motor"), &DRIVE_MOTORS)
                 || ((self.transfer_stage() || self.light_motor_stage() || race_light_entry)
                     && eq_i(control.get("motor"), NEUTRAL))
-                || (self.light_brake_ack_expected() && eq_i(control.get("motor"), LANE_BRAKE_MOTOR)))
+                || ((self.light_brake_ack_expected() || self.crosswalk_brake_ack_expected()) && eq_i(control.get("motor"), LANE_BRAKE_MOTOR)))
         {
             self._route_center_ack = control.pick(&["servo", "motor", "tick", "seq"]);
             if (self.transfer_stage() || race_light_entry) && eq_i(control.get("motor"), NEUTRAL) {
@@ -1355,8 +1356,7 @@ impl Maneuver {
     pub fn begin_light_lane(&mut self, scan: &V, now: f64, control: &V, evidence: V) -> V {
         self.light_alignment_evidence = evidence.clone();
         self.route_event("light_aligned", scan, control, evidence);
-        let waiting_on_entry = self.race_inputs.is_some() && self.route_stage == "light_entry"
-            && self.light_stop_state == Some("waiting");
+        let race_entry = self.race_inputs.is_some() && self.route_stage == "light_entry";
         let finish_already_driving = self.released_light_entry();
         self.route_stage = "light_lane";
         if !self.light_stop_active() && !finish_already_driving {
@@ -1369,8 +1369,7 @@ impl Maneuver {
         self.route_event("light_lane", scan, control, e);
         self.steering_target = self.servo;
         self.reason = "light_lane_started_keep_adopted_command".into();
-        if waiting_on_entry {
-            // Alignment and the second green frame can arrive on the same scan.
+        if race_entry {
             return self.light_lane_update(scan, now, control);
         }
         self.result(now)
@@ -1392,7 +1391,8 @@ impl Maneuver {
         let (Some(speed), Some(cap)) = (speed, cap) else { return ROUTE_SLOW_MOTOR };
         let left = self._power_cmd_at.map_or(0., |at| pmax(0., STRAIGHT_LAG_S - (now - at)));
         let rise = left
-            * if self._power_cmd_motor == Some(STRAIGHT_MOTOR) || self._power_cmd_motor == Some(START_LAUNCH_MOTOR) {
+            * if self._power_cmd_motor == Some(STRAIGHT_MOTOR)
+                || self._power_cmd_motor.is_some_and(|motor| self.is_lane_launch_motor(motor)) {
                 STRAIGHT_ACCEL_MAX_MPS2
             } else if self._power_cmd_motor == Some(TRIAL_MOTOR) {
                 LANE_POWER_ACCEL_MPS2
@@ -1595,11 +1595,13 @@ impl Maneuver {
             if let Some(basis) = basis {
                 self.light_stop_reached(scan, now, control, &basis);
             }
-            self.steering_target = target;
-            self.natural_steering_target = Some(natural);
-            self.reason = "light_stop_approach".into();
-            self.slew(now);
-            return self.result(now);
+            if self.light_stop_state != Some("released") {
+                self.steering_target = target;
+                self.natural_steering_target = Some(natural);
+                self.reason = "light_stop_approach".into();
+                self.slew(now);
+                return self.result(now);
+            }
         }
         let ahead = self.lane_front_range(scan);
         if let Some(result) = self.update_finish_output(scan, ahead, now, control, Some(&steering)) {
@@ -1613,7 +1615,7 @@ impl Maneuver {
     }
 
     pub(super) fn update_finish_output(&mut self, scan: &V, ahead: Option<f64>, now: f64, control: &V, steering: Option<&V>) -> Option<V> {
-        let (basis, feedback) = self.finish_control(scan, ahead, now);
+        let (basis, feedback) = self.finish_control(scan, ahead, now, control.get("motor").oi().filter(|_| control.get("command_acked").is_true()));
         self.lane_feedback = match steering { Some(s) => s.merged(&feedback), None => feedback };
         if let Some(basis) = basis {
             let mut finish = self.lane_feedback.clone();

@@ -583,7 +583,7 @@ impl Program {
                 let captured = self.base_monotonic_s.map(|base| obs.captured_mono_s - base)
                     .unwrap_or(now - obs.compute_ms / 1000.);
                 let row = dict! {"frame" => obs.frame, "captured_at" => captured, "received_at" => now,
-                    "red" => obs.lights.red, "green" => obs.lights.green, "compute_ms" => obs.compute_ms,
+                    "red" => obs.lights.red, "green" => obs.lights.green, "housing_lip_y"=>obs.housing_lip,"compute_ms" => obs.compute_ms,
                     "pinned_cpu" => obs.pinned_cpu.map(|n| n as i64),
                     "capture_to_result_ms" => self.base_monotonic_s.map(|_| (now - captured) * 1000.)};
                 let _ = self.files.send(FileOp::Append("rust-light.jsonl", to_json(&row) + "\n"));
@@ -591,7 +591,7 @@ impl Program {
                     && (0.0..=crate::maneuver::LIGHT_FRAME_MAX_AGE_S).contains(&(self.mono() - captured))
                 {
                     let light = dict! {"frame" => obs.frame, "captured_at" => captured,
-                        "red" => i64::from(obs.lights.red), "green" => i64::from(obs.lights.green)};
+                        "red" => i64::from(obs.lights.red), "green" => i64::from(obs.lights.green),"housing_lip_y"=>obs.housing_lip};
                     self.apply_light(light);
                 }
             }

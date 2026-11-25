@@ -155,7 +155,7 @@ impl Maneuver {
     /// permitting another brake command or changing the terminal controller.
     pub fn light_brake_ack_expected(&self) -> bool {
         self.race_inputs.is_some() && matches!(self.route_stage, "light_entry" | "light_lane")
-            && (self.race_light_brake.is_active() || self.race_light_brake.is_used())
+            && self.race_light_brake.has_braked()
     }
 
     /// _light_entry_coast_ack_dropped(): a centre ACK proven at neutral
@@ -223,6 +223,10 @@ impl Maneuver {
         let (red, green) = (score(light.get("red")), score(light.get("green")));
         if self._light_frames.last().is_some_and(|f| py_eq(f.at(0), frame)) {
             return;
+        }
+        if self.race_program && light.has("housing_lip_y") && self.light_motor_stage()
+            && (0. ..=LIGHT_FRAME_MAX_AGE_S).contains(&(now-captured.f())) {
+            self.race_light.trim.view(captured.f(),light.get("housing_lip_y").of());
         }
         let (crosswalk, row, metres) = (light.get("crosswalk"), light.get("crosswalk_row"), light.get("crosswalk_m"));
         if self.race_inputs.is_none() && self.route_stage == "start_lane" && crosswalk.is_num() && crosswalk.f() >= CROSSWALK_SEEN_SCORE {
@@ -292,7 +296,15 @@ impl Maneuver {
         let (sin, cos) = heading.sin_cos();
         let mut posts = Vec::new();
         visit_posts(ranges, LIGHT_POST_STEP_M, NEAR_POST_EDGE_M, |(x, y), edge| {
-            let (along, left) = (x * cos - y * sin, x * sin + y * cos);
+            // Bring this physical post to the scan timestamp before pairing it
+            // with another station or with the deskewed map pose.
+            let i=(-y.atan2(x).to_degrees().round() as i64).rem_euclid(360);
+            let age=scan.get("point_age_ms").ol().and_then(|a|a.get(i as usize)).and_then(V::of).unwrap_or(0.).clamp(0.,150.)/1000.;
+            let speed=self.field_map.body_speed(scan).unwrap_or(0.);
+            let yaw=self.race_inputs.and_then(|i|i.yaw_rate).unwrap_or(0.);
+            let (s,c)=if age==0. {(sin,cos)}else{(heading-yaw*age).sin_cos()};
+            let (sm,cm)=(heading-0.5*yaw*age).sin_cos();
+            let (along,left)=(x*c-y*s-speed*age*cm,x*s+y*c-speed*age*sm);
             if !(lo..=hi).contains(&left) {
                 return;
             }
@@ -514,6 +526,7 @@ impl Maneuver {
                 self._light_line.set("station_spacing_m", spacing);
             }
             if race {
+                self._light_line.set("measured_both_stations", gantry.beam_along.is_some());
                 let identity = if self._light_line.has("station_spacing_m") {
                     "two_stations"
                 } else if gantry.legs.len() == 2 && divider.is_some_and(|d| (d-near).abs() <= LIGHT_LINE_JUMP_M) {
@@ -538,6 +551,7 @@ impl Maneuver {
                     "leg_offsets_m" => V::list(pair.legs.iter().map(|leg| V::Float(leg.0-gate)).collect()),
                     "at_s" => at, "source" => "legs", "board_m" => board, "speed_mps" => self.race_light.last_speed.map(|v| v.1)
                 });
+                line.set("measured_both_stations", pair.beam_along.is_some());
                 if let Some(beam) = pair.beam_along {
                     line.set("station_spacing_m", gate-beam);
                     line.set("station_identity", "two_stations");
@@ -626,6 +640,7 @@ impl Maneuver {
             },
         });
         line.set("legs", legs_v(&legs));
+        if race { line.set("measured_both_stations", false); }
         self._light_line = line;
         Some(near)
     }
@@ -680,8 +695,17 @@ impl Maneuver {
                 matches!(self._light_line.get("station_identity").os(), Some("two_stations" | "divider_and_pair"))
                     && matches!(self._light_line.get("source").os(), Some("legs" | "board_odometry"))
             });
-            let mapped = self.use_field_guidance().then(|| self.field_map.gantry_ahead(scan)).flatten();
-            let ahead = self.race_light.opening_ahead(scan, heading, lane, mapped, station);
+            let wall_fix = self.use_field_guidance() && self.field_map.motion_supported(scan);
+            let mapped = wall_fix.then(|| self.field_map.gantry_ahead(scan)).flatten();
+            let axis_speed = wall_fix.then(||self.field_map.axis_speed(scan)).flatten()
+                .or_else(||self.race_light.last_speed.filter(|(t,_)|now-t<=SCAN_AGE_S).map(|(_,v)|v));
+            let body=self.field_map.body_speed(scan).or_else(||self.race_light.body_speed(scan,now,self.race_inputs.and_then(|i|i.forward_integral))).unwrap_or(0.);
+            let yaw=self.race_inputs.and_then(|i|i.yaw_rate).unwrap_or(0.);
+            let edge=self.race_light.observe_lane_tip(scan,heading,lane,mapped,body,yaw,axis_speed);
+            let support = crate::race_light::OpeningSupport {mapped,station,axis_speed,edge,
+                sees_both_stations:self._light_line.get("measured_both_stations").is_true(),
+                live_legs:self._light_line.get("source").os()==Some("legs")};
+            let ahead = self.race_light.opening_ahead(scan, heading, lane, support);
             if let Some(distance) = ahead {
                 if !self.race_light.speed_uses_gantry {
                     self.race_light.speed_uses_gantry = true;
@@ -702,14 +726,14 @@ impl Maneuver {
                 }
                 self.light_stop_state = Some("approach");
                 let wheel_gap = if lane.get("outer_lateral_m").of().is_none()
-                    && self.race_light.opening_source == Some("surveyed_finish_opening")
+                    && matches!(self.race_light.opening_source,Some("surveyed_finish_opening"|"registered_station_opening"))
                 {
                     self.front_wheel_to_beam(distance, heading, &self.field_map.finish_lane(scan))
                 } else {
                     self.front_wheel_to_beam(distance, heading, lane)
                 };
                 let previous = self.race_light.beam_at;
-                self.race_light.observe_beam(now, wheel_gap);
+                self.race_light.observe_beam(scan.idx("received_at").f(), wheel_gap);
                 if previous.is_none()
                     && let Some(crossed_at) = self.race_light.beam_at
                 {
@@ -718,7 +742,7 @@ impl Maneuver {
                         scan,
                         control,
                         dict! {
-                            "crossed_at"=>crossed_at, "wheel_gap_m"=>wheel_gap,
+                            "crossed_at"=>crossed_at, "wheel_gap_m"=>wheel_gap,"basis"=>self.race_light.beam_basis,
                             "opening_source" => self.race_light.opening_source, "gantry_ahead_m"=>distance,
                         },
                     );
@@ -805,7 +829,19 @@ impl Maneuver {
         let gap = ahead.map(|a| a - front_extent);
         let zone_length = LIGHT_SENSOR_TO_GANTRY_M;
         let to_sensor = gap.map(|g| g - zone_length);
+        // Aim for the two end lamps while keeping the projected rear inside the entry.
         let target_gap = VISIBLE_LIGHT_STOP_GAP_M.min(zone_length - front_extent - rear_extent - REAR_CLEARANCE_TARGET_M);
+        // Reset speed range history and gap fusion when opening_source changes so a reference step
+        // cannot fabricate a 2.7 m/s speed spike and trigger a premature brake 3.5 m early.
+        if self.race_light.opening_rebased || (self.race_light.opening_source.is_some()
+            && self.race_light.prev_opening_source.is_some_and(|prev| Some(prev) != self.race_light.opening_source))
+        {
+            self.race_light.ranges.clear();
+            self.race_light_brake.reset_gap_fusion();
+        }
+        if self.race_light.opening_source.is_some() {
+            self.race_light.prev_opening_source = self.race_light.opening_source;
+        }
         let reference = ahead;
         let (speed, current_speed) = self.race_light.measure_speed(scan, reference, input.forward_integral, axis_cos);
         // The same fresh physical cone that carries the gap also measures
@@ -822,14 +858,64 @@ impl Maneuver {
         // component of drag over the coast from the present heading to straight.
         let axial_decel = decel * (1. + axis_cos.max(0.)) * 0.5;
         let brake_model = BrakeModel::light(axis_cos, axial_decel);
-        self.race_light_brake.set_surveyed_release_zone(
-            self.race_light.beam_at.map(|_| zone_length - front_extent - rear_extent),
-        );
-        // Fuse observation corrections once, then let cruise and brake use
-        // the same continuous position estimate. Zone checks below keep the
-        // measured front/rear gaps, never a filtered declaration of success.
-        self.race_light_brake.observe(now, gap, current_speed.or(speed), input.forward_integral, axis_cos,
-            axial_decel, brake_model, target_gap);
+        let applied = control.get("motor").oi().filter(|_| control.get("command_acked").is_true());
+        if applied==Some(crate::race_light_brake::LIGHT_BRAKE_MOTOR) && self.race_light_brake.has_braked() {self.race_light.trim.brake_acked=true;}
+        self.race_light_brake.resume_after_forward(applied, current_speed.or(speed));
+        let fresh_gantry = match self.race_light.opening_source {
+            Some("confirmed_gantry_stations") => self._light_line.get("source").os() == Some("legs"),
+            Some("end_board_to_measured_opening" | "visible_divider_opening" | "measured_right_board_opening") => true,
+            Some("surveyed_finish_opening"|"registered_station_opening") => self.field_map.motion_supported(scan),
+            _ => false,
+        };
+        let range_speed = self.race_light_brake.observe_range_speed(now, speed.filter(|_| fresh_gantry),
+            &self.race_light.ranges, axial_decel, brake_model);
+        // A sudden IMU loss must not move the physical braking point toward
+        // the lamp. The measured wall axes and opening rate constrain closing
+        // speed even while the projected pose is turning onto the straight.
+        let map_speed = self.field_map.motion_supported(scan).then(|| self.field_map.axis_speed(scan)).flatten();
+        let supported = match (map_speed, range_speed, speed) {
+            (Some(map), Some(lower), Some(raw)) => {
+                let supported_map = map.max(lower).min(raw.max(lower));
+                Some(current_speed.map_or(supported_map, |v| (lower + (lower - v).max(0.)).min(supported_map)))
+            }
+            (map, range, _) => map.or(range),
+        };
+        // Before braking an accelerating car can outrun the lagged cone/IMU
+        // filter. Two current displacement estimates agreeing on the faster
+        // closing rate own that part of the budget. Don't carry it into rest.
+        let approach_rate=if self.race_light_brake.is_active() {None} else {
+            map_speed.zip(speed).map(|(a,b)|a.min(b)).or_else(||map_speed.filter(|_|self.race_light.raw_tip.is_some()))
+        };
+        let raw_brake_speed = [current_speed.or(speed), supported, approach_rate].into_iter().flatten().reduce(f64::max);
+        let brake_speed = if self.race_light_brake.is_active()
+            && range_speed.is_some_and(|r| r <= crate::race_light_brake::BRAKE_REST_MPS)
+            && map_speed.is_none_or(|m| m <= 0.06)
+        {
+            Some(range_speed.unwrap().max(map_speed.unwrap_or(0.)))
+        } else {
+            raw_brake_speed
+        };
+        // The stopping model consumes lane-axis speed. While straightening, part of
+        // the present transverse velocity is about to become closing speed. Include
+        // that change and the remaining drive during the measured ESC response in
+        // its *distance* budget, without polluting the range/standstill observer.
+        let measured_body = self.race_light.body_speed(scan, now, input.forward_integral)
+            .or_else(|| map_speed.and_then(|_|self.field_map.body_speed(scan)));
+        let body_speed = measured_body
+            .or_else(|| v.filter(|_| axis_cos > 0.).map(|v| v / axis_cos));
+        let brake_target = brake_speed.map_or(target_gap, |axial| {
+            let straightening = axis_cos>0. && sin*input.yaw_rate.unwrap_or(0.) < 0.;
+            let speed = if straightening { measured_body.unwrap_or(axial).max(axial) } else { axial };
+            let powered = applied.filter(|&p|p>NEUTRAL).and_then(|p| self.race_surface.predicted_drive_accel(p,body_speed,now)).unwrap_or(0.).max(0.);
+            let tail = 0.066;
+            (target_gap - 0.03).max(0.47) + brake_model.distance(speed + powered*tail) - brake_model.distance(axial) + 0.5*powered*tail*tail
+        });
+        // Do not latch a premature brake during a sharp mid-turn when far from the gantry.
+        let can_arm_brake = self.race_light_brake.is_active() || axis_cos >= 0.72 || gap.is_some_and(|g| g <= 2.4);
+        if can_arm_brake {
+            self.race_light_brake.observe(now, gap, brake_speed, input.forward_integral, axis_cos,
+                axial_decel, brake_model, brake_target);
+        }
         let control_gap = self.race_light_brake.control_gap(now, input.forward_integral).or(gap);
         let lag = crate::motion_sensors::ESC_COAST_DELAY_S;
         let (_, tail) = self.lane_pipeline(now, lag, lag, 0.);
@@ -844,8 +930,6 @@ impl Maneuver {
         // 1570 has its own measured response in SurfaceResponse. Forecast its
         // base propulsion even when load compensation is zero; the old 0.35
         // constant described 1550. Project body acceleration into the lane.
-        let body_speed = self.race_light.body_speed(scan, now, input.forward_integral)
-            .or_else(|| v.filter(|_| axis_cos > 0.).map(|v| v / axis_cos));
         let drive_acceleration = |pwm| self.race_surface.predicted_drive_accel(pwm, body_speed, now)
             .map(|a| a * axis_cos.max(0.) + heading_accel);
         let cruise_pwm = if matches!(self.race_light.phase, LightRoll::Hold) {
@@ -882,7 +966,12 @@ impl Maneuver {
         });
         let rear_gap = ahead.map(|a| a + rear_extent);
         let rear_past_sensor = rear_gap.map(|g| zone_length - g);
-        let whole_in_zone = gap.is_some_and(|g| g >= 0.) && rear_past_sensor.is_some_and(|d| d > 0.);
+        let tip_supported=matches!(self.race_light.opening_source,Some("measured_right_board_opening"|"carried_right_board_opening"|"registered_station_opening"));
+        // The last car stop was on the opening edge within scan resolution,
+        // after both end lights had already clipped. Don't certify a positive
+        // millimetre as being upstream; use the existing measured inch-back.
+        let disputed_tip=tip_supported && self.race_light.trim.cropped() && gap.is_some_and(|g|g<=LIDAR_RANGE_ALLOWANCE_M);
+        let whole_in_zone = !disputed_tip && gap.is_some_and(|g| g >= 0.) && rear_past_sensor.is_some_and(|d| d > 0.);
         let rear_clear = rear_past_sensor.is_some_and(|d| d >= REAR_CLEARANCE_TARGET_M);
         let needs_advance = gap.is_some_and(|g| g > target_gap) && !rear_clear;
         let speed_now = current_speed.or(speed);
@@ -909,21 +998,32 @@ impl Maneuver {
         {
             self.race_light.completing_zone_stop = true;
         }
-        if ahead.is_none() || settle || coast_gap.is_some_and(|g| g <= target_gap) {
+        let rolling = speed_now.is_some_and(|v| v > crate::race_light_brake::BRAKE_REST_MPS);
+        let forward_ack = control.get("motor").oi().is_some_and(|p| p > NEUTRAL);
+        if ahead.is_none() || self.race_light_brake.is_active() || (settle && !rolling && !forward_ack) {
             self.race_light.completing_zone_stop = false;
+        }
+        if rolling && gap.is_some_and(|g| g <= brake_target) && self._power_cmd_at.is_some() {
+            self.race_light_brake.begin_stop(now);
         }
         let motor = if self.race_light.completing_zone_stop {
             if slow { TRIAL_MOTOR } else { ROLLING_HOLD_MOTOR }
-        } else if settle || self.race_light_brake.is_used() || (ahead.is_none() && self.race_light.beam_at.is_some()) {
+        } else if self.race_light_brake.is_used() || (ahead.is_none() && self.race_light.beam_at.is_some()) {
             NEUTRAL
+        } else if ahead.is_none() && self.light_stop_state == Some("approach") {
+            ROLLING_HOLD_MOTOR
+        } else if settle {
+            if rolling { ROLLING_HOLD_MOTOR } else { NEUTRAL }
         } else if slow {
             TRIAL_MOTOR
-        } else if matches!(self.race_light.phase, LightRoll::Coast) {
-            ROLLING_HOLD_MOTOR
-        } else if matches!(self.race_light.phase, LightRoll::Hold) {
+        } else if brake_speed.is_some_and(|s| s >= 2.35) {
             ROUTE_SLOW_MOTOR
+        } else if axis_cos < 0.85 {
+            if brake_speed.is_some_and(|s| s >= 1.80) { ROUTE_SLOW_MOTOR } else { RACE_CRUISE_MOTOR }
+        } else if axis_cos < 0.94 || brake_speed.is_some_and(|s| s >= 2.22) {
+            1600
         } else {
-            RACE_CRUISE_MOTOR
+            START_LAUNCH_MOTOR
         };
 
         let brake_stop = control_gap.zip(v).map(|(g, v)| g-brake_model.stop_travel(v, acceleration.unwrap_or(0.)));
@@ -931,29 +1031,54 @@ impl Maneuver {
             let next = (v + acceleration.unwrap_or(0.) * step).max(0.);
             g-(v+next)*step/2.-brake_model.stop_travel(next, acceleration.unwrap_or(0.))
         });
+        // Release 1300 immediately once stopped inside the light zone (eliminates ~0.4 s uncredited rest lag).
+        if self.race_light_brake.is_active()
+            && whole_in_zone && rear_clear && self.race_light.beam_at.is_some()
+            && current_speed.or(range_speed).is_some_and(|s| s <= 0.04)
+            && map_speed.is_none_or(|m| m <= 0.05)
+        {
+            self.race_light_brake.release_at_rest(now);
+        }
         let motor = self.race_light_brake.command(now, input.forward_integral).unwrap_or(motor);
         self.lane_motor = motor;
-        let settling = whole_in_zone && rear_clear
+        let settling = (whole_in_zone || disputed_tip) && rear_clear
             && self.race_light.beam_at.is_some()
-            && motor == NEUTRAL
-            && control.get("motor").oi() == Some(NEUTRAL)
-            && speed_now.is_none_or(|s| s < LIGHT_RESTART_MPS);
+            && (motor == NEUTRAL || self.race_light_brake.is_active())
+            && speed_now.is_none_or(|s| s < LIGHT_RESTART_MPS)
+            && map_speed.is_none_or(|v|v < LIGHT_RESTART_MPS);
         let still_range = settling
             .then(|| {
                 let wall = self.compass.current(scan).and_then(|h| crate::race_light::observed_end_wall(scan, h));
                 wall.map(|distance| ("end_board", distance)).or_else(|| {
                     let source = self.race_light.opening_source?;
                     let fresh = match source {
-                        "visible_divider_opening" => true,
+                        "visible_divider_opening" | "measured_right_board_opening" => true,
                         "confirmed_gantry_stations" => self._light_line.get("source").os() == Some("legs"),
-                        "surveyed_finish_opening" => self.field_map.two_measured_axes(scan),
+                        "surveyed_finish_opening"|"registered_station_opening" => self.field_map.two_measured_axes(scan),
                         _ => false,
                     };
                     fresh.then_some((source, ahead?))
                 })
             })
             .flatten();
-        let stopped = self.race_light.stationary_in_zone(scan.idx("received_at").f(), still_range);
+        // Used means the ESC application has ended, not that the vehicle is at rest.
+        // Use independent range samples even after 1300 and after a position conflict.
+        let triple_still = map_speed.is_some_and(|v| v <= 0.04)
+            && range_speed.is_none_or(|v| v <= 0.08)
+            && speed_now.is_some_and(|v| v <= 0.04);
+        let stable_win = if triple_still && self.race_light_brake.is_used() { 0.09 } else { crate::coast::MIN_RECEIVE_STABLE_S };
+        let rested = self.race_light.stationary_in_zone(scan.idx("received_at").f(), still_range, stable_win)
+            && motor == NEUTRAL && applied == Some(NEUTRAL);
+        if rested && disputed_tip && self.race_light.trim.brake_acked && self.race_light_brake.is_used()
+            && !self.race_light.trim.before_stop && let (Some(f),Some(d))=(self.trim_fix(scan),ahead) {
+            self.race_light.trim.arm_tip(f,d,true);
+        }
+        if self.race_light.trim.before_stop {
+            let fix=self.trim_fix(scan);
+            self.lane_motor=self.race_light.trim.update(now,fix,applied,false);
+        }
+        let motor=self.lane_motor;
+        let stopped = rested && whole_in_zone && motor==NEUTRAL && !self.race_light.trim.active();
         let basis = stopped.then(|| "stopped_inside_opening_zone".to_owned());
 
         let feedback = dict! {"goal" => "light", "front_range_m" => ahead, "front_gap_m" => gap,
@@ -961,13 +1086,13 @@ impl Maneuver {
             "surveyed_front_gap_m" => self.field_map.gantry_ahead(scan).map(|d| d-front_extent),
             "completing_zone_stop" => self.race_light.completing_zone_stop, "opening_source" => self.race_light.opening_source,
             "front_wheel_to_beam_m" => self.race_light.front_wheel_gap_m, "beam_crossed_at" => self.race_light.beam_at,
-            "position_reference" => self.race_light.position_diagnostics(),
+            "position_reference" => self.race_light.position_diagnostics(), "measured_right_tip_m"=>self.race_light.raw_tip,
             "control_front_gap_m" => control_gap, "speed_fusion" => self.race_light.speed_fusion_diagnostics(),
             "speed_reference_source" => "finish_opening",
             "speed_reference_m" => reference,
             "sensor_ahead_of_front_m" => to_sensor, "sensor_to_gantry_m" => LIGHT_SENSOR_TO_GANTRY_M,
             "speed_mps" => speed, "speed_now_mps" => current_speed, "beam_coast_speed_mps" => beam_speed,
-            "stop_target_gap_m" => target_gap, "predicted_stop_gap_m" => predicted, "coast_decel_mps2" => decel,
+            "brake_target_gap_m" => brake_target, "stop_target_gap_m" => target_gap, "predicted_stop_gap_m" => predicted, "coast_decel_mps2" => decel,
             "body_coast_stop_if_renewed_m" => coast_if_renewed,
             "rolling_hold_pwm" => ROLLING_HOLD_MOTOR,
             "cruise_pwm" => cruise_pwm, "cruise_accel_mps2" => cruise_accel,
@@ -985,6 +1110,24 @@ impl Maneuver {
         (basis, feedback)
     }
 
+    fn trim_fix(&self,scan:&V)->Option<crate::race_light::trim::Fix> {
+        if !self.field_map.motion_supported(scan){return None}
+        let h=self.compass.current(scan)?;
+        if h.abs()>open_lane_entry_heading_rad(){return None}
+        let (s,c)=h.sin_cos();let w=SIDE_BODY_EXTENT_M*s.abs();
+        let lane=self.field_map.finish_lane(scan);
+        let lateral=SIDE_BODY_EXTENT_M*c.abs()+FRONT_BODY_EXTENT_M.max(REAR_BODY_EXTENT_M)*s.abs();
+        if lane.get("outer_lateral_m").of()?<lateral || -lane.get("inner_lateral_m").of()?<lateral{return None}
+        let ranges=scan.get("ranges").ol()?;
+        let rear_free=(120..=240).filter_map(|i|{let r=ranges.get(i)?.of()?;
+            ((r*dsin(i)).abs()<=SIDE_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M).then_some(-r*dcos(i)-REAR_BODY_EXTENT_M)
+        }).reduce(f64::min)?;
+        Some(crate::race_light::trim::Fix{at:scan.get("received_at").of()?,wall:crate::race_light::observed_end_wall(scan,h)?,
+            mapped:self.field_map.gantry_ahead(scan)?,front:FRONT_BODY_EXTENT_M*c+w,rear:REAR_BODY_EXTENT_M*c+w,rear_free})
+    }
+
+    pub(crate) fn trim_ack_expected(&self)->bool { self.race_program && self.race_light.trim.late_ack(self.last_now) && self.light_motor_stage() }
+
     /// _light_stop_reached(scan, now, control, basis).
     pub fn light_stop_reached(&mut self, scan: &V, now: f64, control: &V, basis: &str) {
         let stop = self.lane_feedback.merged(&dict! {
@@ -993,6 +1136,11 @@ impl Maneuver {
             "zone_m" => LIGHT_ZONE_M, "stop_zone_certified" => false,
         });
         self.light_stop_state = Some("waiting");
+        if self.race_program && !self.race_light.trim.before_stop && self.race_light.trim.brake_acked && self.race_light_brake.is_used() && control.get("command_acked").is_true()
+            && control.get("motor").oi()==Some(NEUTRAL) && let (Some(f),Some(plane))=(self.trim_fix(scan),stop.get("front_range_m").of()) {
+            if matches!(self.race_light.opening_source,Some("measured_right_board_opening"|"carried_right_board_opening"|"registered_station_opening")) {self.race_light.trim.arm_tip(f,plane,false)}
+            else {self.race_light.trim.arm(f,plane)}
+        }
         self._light_wait_since = Some(now);
         self._light_wait_tick = Some(now);
         self._light_stop_red_frames = 0;
@@ -1001,11 +1149,15 @@ impl Maneuver {
         let base = if self.light_stop_evidence.is_dict() { self.light_stop_evidence.clone() } else { V::dict() };
         self.light_stop_evidence = base.merged(&dict! {"stop" => stop.clone()});
         self.route_event("light_stop", scan, control, stop);
+        // The front-wheel clock may have expired while braking (including a
+        // zero-second limit). Consume it on this same scan, but only after stop.
+        if self.race_inputs.is_some() { self.light_wait(scan, now, control); }
     }
 
     /// _light_wait(scan, now, control): True once released.
     pub fn light_wait(&mut self, scan: &V, now: f64, control: &V) -> bool {
-        let waited_now = pmax(0., now - self._light_wait_tick.unwrap());
+        let backing=self.race_light.trim.active();
+        let waited_now = if backing {0.} else {pmax(0., now - self._light_wait_tick.unwrap())};
         self._light_wait_tick = Some(now);
         let since = self.drive_since.unwrap_or_else(|| type_error("unsupported operand type(s) for +=: 'NoneType' and 'float'"));
         self.drive_since = Some(since + waited_now); // standing is not drive time
@@ -1036,8 +1188,18 @@ impl Maneuver {
         let no_light = !self._light_seen && waited >= LIGHT_NO_LIGHT_WAIT_S;
         let wait_limit = self.race_light_wait_s.unwrap_or(DEFAULT_RACE_LIGHT_WAIT_S);
         let since_beam = self.race_light.beam_at.map(|at| now - at);
-        let beam_timeout = since_beam.is_some_and(|s| s >= wait_limit);
-        let wait = if race { !green && !beam_timeout }
+        let beam_timeout = self.race_light.beam_at.is_some_and(|at| now >= at + wait_limit);
+        if race && !green && self.race_light.trim.needs_scan() {
+            let fix=self.trim_fix(scan);let ack=control.get("motor").oi().filter(|_|control.get("command_acked").is_true());
+            if fix.is_none() && self.race_light.trim.active() {
+                let wall=self.compass.current(scan).filter(|h|h.abs()<=open_lane_entry_heading_rad()).and_then(|h|{
+                    let (s,c)=h.sin_cos();let side=SIDE_BODY_EXTENT_M*s.abs();
+                    Some((crate::race_light::observed_end_wall(scan,h)?,FRONT_BODY_EXTENT_M*c+side,REAR_BODY_EXTENT_M*c+side))
+                });
+                self.race_light.trim.wall_settle(scan.idx("received_at").f(),wall,ack);
+            }else {self.lane_motor=self.race_light.trim.update(now,fix,ack,beam_timeout);}
+        }
+        let wait = if race { !green && (!beam_timeout || self.race_light.trim.active()) }
             else { !green && !red_ended && !red_timed && !no_light && waited < LIGHT_WAIT_MAX_S };
         if wait {
             // the board ahead's history for the restart
@@ -1046,6 +1208,13 @@ impl Maneuver {
             return false;
         }
         self.prepare_finish_release(scan, now);
+        if backing && green {
+            // The compulsory stop already happened. A fresh green preempts even an
+            // acknowledged reverse output; no intervening neutral or second stop.
+            if let Some(z)=&mut self.finish.imu_zero {*z-=self.race_light.trim.signed_forward;}
+            if self.finish.launch_until.is_some(){self.lane_motor=LIGHT_LAUNCH_MOTOR;}
+        }
+        self.race_light.trim.release();
         let basis = if race {
             if green { "fresh_green_after_beam_and_stop" } else { "configured_limit_after_front_wheel_crossing" }
         } else if green && self._light_red_frames != 0 {
@@ -1074,6 +1243,8 @@ impl Maneuver {
         let mut go = go;
         if let Some(limit) = self.race_light_wait_s { go.set("light_max_wait_s", limit); }
         if race {
+            if self.race_light.trim.issued {go.set("trim_at_go",self.race_light.trim.diagnostics());go.set("green_preempted_trim",backing && green);}
+            go.set("decided_at",now);
             go.set("green_min_score", green_min_score);
             go.set("beam_crossed_at", self.race_light.beam_at);
             go.set("since_beam_s", since_beam);
@@ -1109,6 +1280,48 @@ mod tests {
     fn light_scan(seq: i64, at: f64) -> V {
         dict! {"seq"=>seq, "at_ms"=>(1000.*at).round() as i64, "received_at"=>at,
         "ranges"=>vec![V::Float(3.);360]}
+    }
+
+    #[test]
+    fn used_brake_and_expired_limit_do_not_release_a_moving_car() {
+        for (limit,begin,green) in [(0.,2.,false),(10.,12.,false),(10.,2.,false),(10.,2.,true)] {
+            let mut m=Maneuver::new(&0.0.into(),&40.0.into(),&1670.into(),&true.into());
+            m.race_inputs=Some(crate::motion_sensors::RaceInputs{yaw_rate:Some(0.),forward_integral:Some(0.)});
+            m.race_light_wait_s=Some(limit);m.race_light.beam_at=Some(1.);
+            m.route_stage="light_lane";m.drive_since=Some(0.);m.light_stop_state=Some("approach");
+            m.race_light_brake.begin_stop(1.);m.race_light_brake.output_observed(NEUTRAL);
+            let ctrl=dict!{"motor"=>NEUTRAL,"command_acked"=>true};
+            for i in 0..25 {
+                let at=begin+0.1*i as f64;let travel=0.018*i.min(9) as f64;
+                let mut scan=light_scan(i,at);scan.set("ranges",vec![V::Float(3.65-travel);360]);
+                m.compass.heading=Some(0.);m.compass.at_s=Some(at);m.compass.measured_at_s=Some(at);
+                // Even a false zero-speed anchor and a neutral echo cannot substitute
+                // for repeated current stationary ranges at the physical stop.
+                let ahead=0.74-travel;m.race_light.ranges=vec![(at-0.2,at-0.2,ahead),(at-0.1,at-0.1,ahead)];
+                let (b,fb)=m.light_approach_control(&scan,Some(ahead),at,&ctrl);
+                if i<10 { assert!(b.is_none());assert!(!m.light_stop_evidence.has("go")); }
+                if let Some(b)=b {
+                    m.lane_feedback=fb;m.light_stop_reached(&scan,at,&ctrl,&b);
+                    assert!(m.light_stop_evidence.get("stop").get("rear_past_sensor_m").f()>0.);
+                    if at>=1.+limit {
+                        assert_eq!(m.light_stop_evidence.get("go").get("received_at").of(),Some(at));
+                        assert_eq!(m.light_wait_credit_s,0.);
+                    } else if green {
+                        for (n,dt) in [(1,0.1),(2,0.2)] {
+                            let c=dict!{"light"=>dict!{"frame"=>n,"captured_at"=>at+dt,"green"=>0.9,"red"=>0.}};
+                            m.light_observe(&c,at+dt);assert_eq!(m.light_wait(&light_scan(i+n,at+dt),at+dt,&ctrl),n==2);
+                        }
+                        assert_eq!(m.light_stop_evidence.get("go").get("basis").os(),Some("fresh_green_after_beam_and_stop"));
+                    } else {
+                        assert!(!m.light_wait(&light_scan(30,10.99),10.99,&ctrl));
+                        assert!(m.light_wait(&light_scan(31,11.),11.,&ctrl));
+                        assert!((m.light_wait_credit_s-(11.-at)).abs()<1e-9);
+                    }
+                    break;
+                }
+            }
+            assert_eq!(m.light_stop_state,Some("released"));
+        }
     }
 
     #[test]
@@ -1162,7 +1375,7 @@ mod tests {
             "speed_mps"=>0., "source"=>"legs","confirmed_seq"=>1,"station_identity"=>"two_stations",
             "legs"=>legs_v(&[(distance,0.45),(distance,-0.45)]),"leg_offsets_m"=>V::from(vec![0.,0.])}
         };
-        let neutral = dict! {"motor"=>NEUTRAL};
+        let neutral = dict! {"motor"=>NEUTRAL,"command_acked"=>true};
         m._light_line = legs(1.20, 1.);
         let z = m.light_stop_track(&light_scan(10, 1.), 1., &neutral, Some(0.), &V::None).unwrap();
         assert!((z - 1.20).abs() < 1e-7);
@@ -1199,9 +1412,8 @@ mod tests {
             }
         }
         let at = stop.expect("neutral and stable inside the zone");
-        assert_eq!(m.light_stop_state, Some("waiting"));
-        assert!(m.light_wait(&light_scan(40, at + 0.1), at + 0.1, &neutral));
         assert_eq!(m.light_stop_state, Some("released"));
+        assert_eq!(m.light_stop_evidence.get("go").get("received_at").of(),Some(at));
     }
 
     #[test]
@@ -1232,9 +1444,21 @@ mod tests {
         let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
         let mut lane = dict! {"outer_lateral_m"=>0.5, "width_m"=>0.9, "inner_start_along_m"=>0.8};
         let scan = light_scan(1, 1.);
-        assert_eq!(m.race_light.opening_ahead(&scan, 1.3, &lane, None, None), None);
+        assert_eq!(m.race_light.opening_ahead(&scan, 1.3, &lane, Default::default()), None);
         // When the map jumps upstream, two measured stations keep the physical opening.
-        assert_eq!(m.race_light.opening_ahead(&scan, 0., &lane, Some(4.), Some(0.8)), Some(0.8));
+        assert_eq!(m.race_light.opening_ahead(&scan, 0., &lane, crate::race_light::OpeningSupport{
+            mapped:Some(4.),station:Some(0.8),live_legs:true,sees_both_stations:true,axis_speed:None,edge:None}), Some(0.8));
+        // A previously accepted survey can also be corrected, but not by
+        // jumping to one uncorroborated return or a held leg from the same scan.
+        let mut r=crate::race_light::RaceLight::default();
+        let mut obs=|seq,at,map,legs,both|r.opening_ahead(&light_scan(seq,at),0.,&V::None,
+            crate::race_light::OpeningSupport{mapped:Some(map),station:legs,live_legs:true,sees_both_stations:both,axis_speed:Some(1.),edge:None});
+        assert_eq!(obs(1,1.,4.,None,false),Some(4.));
+        assert_eq!(obs(2,1.1,3.9,Some(1.30),false),Some(3.9));
+        assert_eq!(obs(3,1.2,3.8,Some(1.20),false),Some(3.8));
+        assert_eq!(obs(4,1.3,3.7,Some(1.10),true),Some(3.7));
+        assert_eq!(obs(5,1.4,3.6,Some(1.00),true),Some(1.00));
+        assert!(r.opening_rebased);
         lane.set("outer_lateral_m", 2.);
         assert_eq!(m.front_wheel_to_beam(1.18, 0., &lane), None);
         lane.set("outer_lateral_m", 0.5);
@@ -1347,7 +1571,7 @@ mod tests {
     }
 
     #[test]
-    fn light_approach_steps_1570_down_once_to_1550_without_toggling_before_1530_and_1300() {
+    fn light_entry_does_not_renew_the_launch_when_the_roll_budget_calls_for_a_step_down() {
         let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
         m.race_inputs = Some(crate::motion_sensors::RaceInputs { yaw_rate: Some(0.), forward_integral: Some(0.) });
         m.light_vision = true;
@@ -1360,42 +1584,53 @@ mod tests {
         m.compass.heading = Some(0.);
         m.race_light.ranges = vec![(0.8, 0.8, 5.64), (0.9, 0.9, 5.48)];
         let (_, fb0) = m.light_approach_control(&scan(10, 1.0), Some(5.32), 1.0, &dict!{"motor"=>NEUTRAL});
-        assert_eq!(fb0.get("motor").i(), RACE_CRUISE_MOTOR);
+        assert_eq!(fb0.get("motor").i(), START_LAUNCH_MOTOR);
         assert_eq!(m.race_light.phase, LightRoll::Cruise);
 
-        // Entering the stop-zone coast envelope steps 1570 down once to 1550.
+        // Enter the v22 turn envelope (body speed versus lane-axis speed).
         m.compass.heading = Some(1.1);
         m.race_light.entry_motion.observe(&scan(11, 1.1), 1.1, &1.into(), (2.0, -0.8),
             crate::motion_sensors::RaceInputs { yaw_rate: Some(0.), forward_integral: Some(0.) });
         m.race_light.entry_motion.observe(&scan(12, 1.2), 1.2, &1.into(), (1.8, -0.8),
             crate::motion_sensors::RaceInputs { yaw_rate: Some(0.), forward_integral: Some(0.) });
         let (_, fb1) = m.light_approach_control(&scan(12, 1.2), Some(4.20), 1.2, &dict!{"motor"=>NEUTRAL});
-        assert_eq!(fb1.get("motor").i(), ROUTE_SLOW_MOTOR);
+        assert!(fb1.get("motor").i() >= ROUTE_SLOW_MOTOR);
         assert_eq!(m.race_light.phase, LightRoll::Hold);
 
         // A transverse car still has 2 m/s body speed. The small lane-axis
-        // component must not keep 1550 powered until it finishes straightening.
+        // component must not renew a launch just before the continuous brake.
         let (_, fb2) = m.light_approach_control(&scan(13, 1.3), Some(4.40), 1.3, &dict!{"motor"=>NEUTRAL});
-        assert_eq!(fb2.get("motor").i(), ROLLING_HOLD_MOTOR);
+        assert_eq!(fb2.get("motor").i(), ROUTE_SLOW_MOTOR);
         assert_eq!(m.race_light.phase, LightRoll::Coast);
         assert!(fb2.get("predicted_stop_gap_m").f() > VISIBLE_LIGHT_STOP_GAP_M);
         assert!(fb2.get("body_coast_stop_if_renewed_m").f() <= VISIBLE_LIGHT_STOP_GAP_M);
         // Do not use the smaller axis budget to revoke that body-speed cut.
         let (_, fb2b) = m.light_approach_control(&scan(14, 1.35), Some(4.40), 1.35, &dict!{"motor"=>NEUTRAL});
-        assert_eq!(fb2b.get("motor").i(), ROLLING_HOLD_MOTOR);
+        assert_eq!(fb2b.get("motor").i(), ROUTE_SLOW_MOTOR);
 
-        // Closer in, Hold steps down to 1530 rolling hold, then 1300 continuous brake.
+        // Continue without another launch, then one uninterrupted 1300 application.
         m.compass.heading = Some(0.);
         m.race_light.speed_uses_gantry = true;
         m.race_light_brake.reset_gap_fusion();
         m._light_line = dict! {"source" => "legs"};
         m.race_light.ranges = vec![(1.2, 1.2, 3.51), (1.3, 1.3, 3.33)];
         let (_, fb3) = m.light_approach_control(&scan(15, 1.4), Some(3.15), 1.4, &dict!{"motor"=>NEUTRAL});
-        assert_eq!(fb3.get("motor").i(), ROLLING_HOLD_MOTOR);
+        assert_eq!(fb3.get("motor").i(), ROUTE_SLOW_MOTOR);
         assert_eq!(m.race_light.phase, LightRoll::Coast);
 
         m.race_light.ranges = vec![(1.3, 1.3, 2.91), (1.4, 1.4, 2.73)];
         let (_, fb4) = m.light_approach_control(&scan(16, 1.5), Some(2.55), 1.5, &dict!{"motor"=>NEUTRAL});
-        assert_eq!(fb4.get("motor").i(), LIGHT_BRAKE_MOTOR);
+        assert_eq!(fb4.get("motor").i(), ROUTE_SLOW_MOTOR);
+        let mut motor = ROUTE_SLOW_MOTOR;
+        for i in 1..=7 {
+            let t = 1.5 + i as f64 * 0.1;
+            let gap = 2.55 - i as f64 * 0.18;
+            m.race_light.ranges = vec![(t-0.2, t-0.2, gap+0.36), (t-0.1, t-0.1, gap+0.18)];
+            let (_, fb) = m.light_approach_control(&scan(16+i, t), Some(gap), t, &dict!{"motor"=>motor});
+            let next = fb.get("motor").i();
+            assert!(next == LIGHT_BRAKE_MOTOR || (motor == ROUTE_SLOW_MOTOR && next == ROUTE_SLOW_MOTOR));
+            motor = next;
+        }
+        assert_eq!(motor, LIGHT_BRAKE_MOTOR);
     }
 }

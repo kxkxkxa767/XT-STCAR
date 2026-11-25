@@ -24,6 +24,7 @@ pub(crate) struct FinishControl {
     pub creeps: i64,
     /// Round y35: the IMU's forward integral at the light release (the car stood).
     pub imu_zero: Option<f64>,
+    pullup_imu_zero: Option<f64>,
     /// Round y37: the IMU speed of the last moments, its offset from the lidar slope,
     /// and the one 1550 hold of the coast plan.
     pub imu_history: Vec<(f64, f64)>,
@@ -63,7 +64,7 @@ mod continuous_race_tests {
                 assert!(m.finish.last_speed.is_none());
                 assert!(m.finish_board_range(scan).unwrap() - frame.idx("old_front_m").f() > 0.7);
             }
-            let (_, feedback) = m.finish_control(scan, frame.idx("old_front_m").of(), now);
+            let (_, feedback) = m.finish_control(scan, frame.idx("old_front_m").of(), now, None);
             if scan.idx("seq").i() == 294 {
                 assert_ne!(m.lane_motor, LANE_BRAKE_MOTOR);
                 assert_eq!(feedback.get("distance_reference").os(), Some("multi_return_end_board_plane"));
@@ -96,7 +97,7 @@ mod continuous_race_tests {
             }
             let scan = dict! {"seq" => seq, "at_ms" => (at * 1000.) as i64,
                 "received_at" => at, "ranges" => V::list(ranges)};
-            m.finish_control(&scan, Some(ahead), at)
+            m.finish_control(&scan, Some(ahead), at, None)
         };
         step(&mut m, 10, 1., 4.);
         assert_eq!(m.lane_motor, LIGHT_LAUNCH_MOTOR, "1530 is not a standstill launch");
@@ -150,7 +151,7 @@ mod continuous_race_tests {
             m.compass.measured_at_s = Some(at);
             m.race_inputs.as_mut().unwrap().forward_integral = Some(v);
             let scan = make_scan(seq, at, ahead, false);
-            let (_, fb) = m.finish_control(&scan, None, at);
+            let (_, fb) = m.finish_control(&scan, None, at, None);
             assert_eq!(fb.get("distance_reference").os(), Some("multi_return_end_board_plane"));
             if idx == 2 {
                 assert!(m.finish.ranges.len() >= 3);
@@ -162,7 +163,7 @@ mod continuous_race_tests {
         m.compass.measured_at_s = Some(1.3);
         m.race_inputs.as_mut().unwrap().forward_integral = Some(1.7);
         let chord_scan = make_scan(13, 1.3, 2.74, true);
-        let (_, fb) = m.finish_control(&chord_scan, None, 1.3);
+        let (_, fb) = m.finish_control(&chord_scan, None, 1.3, None);
         assert_eq!(fb.get("distance_reference").os(), Some("side_end_corner_chord"));
         assert_eq!(m.finish.ranges.len(), 1);
         assert!(fb.get("speed_mps").is_none());
@@ -182,8 +183,9 @@ mod continuous_race_tests {
         let model = crate::race_light_brake::BrakeModel::finish(0.60);
         m.finish.race_brake.observe(1.0, Some(1.0), Some(1.5), Some(0.), 1., 0.60, model, 0.25);
         assert_eq!(m.finish.race_brake.command(1.0, Some(0.)), Some(LANE_BRAKE_MOTOR));
-        m.finish.race_brake.observe(2.0, Some(0.53), Some(0.05), Some(-1.45), 1., 0.60, model, 0.25);
-        assert_eq!(m.finish.race_brake.command(2.0, Some(-1.45)), Some(NEUTRAL));
+        m.finish.race_brake.observe(2.0, Some(0.53), Some(0.), Some(-1.45), 1., 0.60, model, 0.25);
+        assert_eq!(m.finish.race_brake.command(2.0, Some(-1.45)), Some(LANE_BRAKE_MOTOR));
+        assert_eq!(m.finish.race_brake.command(2.12, Some(-1.45)), Some(NEUTRAL));
         assert!(m.finish.race_brake.is_used());
         m.finish.brake_end = Some(2.05);
         // Car is standing at gap = 0.53 m (ahead = 0.73 m, rear outside 80 cm finish zone).
@@ -200,14 +202,14 @@ mod continuous_race_tests {
             m.compass.at_s = Some(at);
             m.compass.measured_at_s = Some(at);
             let scan = make_flat(seq, at, 0.73);
-            let (basis, _) = m.finish_control(&scan, Some(0.73), at);
+            let (basis, _) = m.finish_control(&scan, Some(0.73), at, None);
             assert!(basis.is_none());
             assert_eq!(m.lane_motor, NEUTRAL);
         }
         // Frame 1 of 2-frame creep after brake_end + 0.3s.
         m.compass.at_s = Some(2.4);
         m.compass.measured_at_s = Some(2.4);
-        let (basis, fb1) = m.finish_control(&make_flat(23, 2.4, 0.73), Some(0.73), 2.4);
+        let (basis, fb1) = m.finish_control(&make_flat(23, 2.4, 0.73), Some(0.73), 2.4, None);
         assert!(basis.is_none());
         assert_eq!(m.lane_motor, TRIAL_MOTOR);
         assert_eq!(fb1.get("creeps").i(), 1);
@@ -215,16 +217,16 @@ mod continuous_race_tests {
         // Frame 2 of 2-frame creep.
         m.compass.at_s = Some(2.5);
         m.compass.measured_at_s = Some(2.5);
-        let (basis, _) = m.finish_control(&make_flat(24, 2.5, 0.71), Some(0.71), 2.5);
+        let (basis, _) = m.finish_control(&make_flat(24, 2.5, 0.71), Some(0.71), 2.5, None);
         assert!(basis.is_none());
         assert_eq!(m.lane_motor, TRIAL_MOTOR);
         m._power_cmd_at = Some(2.5);
-        // Frame 3 ends the 2-frame creep back to neutral.
+        // An unacknowledged forward pull-up cannot issue a second brake.
         m.compass.at_s = Some(2.6);
         m.compass.measured_at_s = Some(2.6);
-        let (basis, _) = m.finish_control(&make_flat(25, 2.6, 0.65), Some(0.65), 2.6);
+        let (basis, _) = m.finish_control(&make_flat(25, 2.6, 0.65), Some(0.65), 2.6, None);
         assert!(basis.is_none());
-        assert_eq!(m.lane_motor, NEUTRAL);
+        assert_eq!(m.lane_motor, TRIAL_MOTOR);
         assert_eq!(m.finish.pulse, 0);
     }
 }
@@ -247,6 +249,7 @@ impl FinishControl {
     pub fn race_brake_motor(&mut self, now: f64, integral: Option<f64>) -> Option<i64> {
         let motor = self.race_brake.command(now, integral)?;
         if motor == LANE_BRAKE_MOTOR {
+            self.brake_end = None;
             self.brake_since.get_or_insert(now);
         } else if self.brake_since.take().is_some() {
             self.brake_end = Some(now);
@@ -268,13 +271,13 @@ impl Maneuver {
             || (self.route_stage == "light_entry" && (self.light_stop_active() || self.released_light_entry()))
     }
 
-    pub(super) fn finish_control(&mut self, scan: &V, ahead: Option<f64>, now: f64) -> (Option<String>, V) {
-        self.lane_goal_control(scan, ahead, now, &FINISH_GOAL)
+    pub(super) fn finish_control(&mut self, scan: &V, ahead: Option<f64>, now: f64, applied_motor: Option<i64>) -> (Option<String>, V) {
+        self.lane_goal_control(scan, ahead, now, &FINISH_GOAL, applied_motor)
     }
 
     // Only the legacy console reference uses the original generic light goal.
     pub(super) fn reference_light_goal(&mut self, scan: &V, ahead: Option<f64>, now: f64) -> (Option<String>, V) {
-        self.lane_goal_control(scan, ahead, now, &LIGHT_GOAL)
+        self.lane_goal_control(scan, ahead, now, &LIGHT_GOAL, None)
     }
 
     pub(super) fn prepare_finish_wait(&mut self, scan: &V) {
@@ -332,8 +335,8 @@ impl Maneuver {
         }
         let at = |t: f64| h.windows(2).find(|w| w[0].0 <= t && t <= w[1].0)
             .map(|w| if w[1].0 > w[0].0 { w[0].1 + (w[1].1 - w[0].1) * (t - w[0].0) / (w[1].0 - w[0].0) } else { w[0].1 });
-        if let (Some(l), Some(then)) = (lidar.filter(|_| !launch), at(now - lag)) {
-            let sample = l - then;
+        if let (Some(l), Some(then)) = (lidar.filter(|_| !launch && self.finish.ranges.len() >= 4), at(now - lag)) {
+            let sample = (l - then).clamp(-1.50, 0.15);
             self.finish.imu_bias = Some(self.finish.imu_bias.map_or(sample, |b| 0.7 * b + 0.3 * sample));
         }
         let coasting = self._power_cmd_at.is_none_or(|p| now - p >= COAST_SLOPE_S + ESC_COAST_DELAY_S)
@@ -515,7 +518,7 @@ impl Maneuver {
     /// _lane_goal_control(scan, ahead, now, goal): the light lane's
     /// coast/push/kick/creep control toward a line ``ahead`` (the end board,
     /// round y2 also the light line): (basis, feedback).
-    fn lane_goal_control(&mut self, scan: &V, ahead: Option<f64>, now: f64, goal: &Goal) -> (Option<String>, V) {
+    fn lane_goal_control(&mut self, scan: &V, ahead: Option<f64>, now: f64, goal: &Goal, applied_motor: Option<i64>) -> (Option<String>, V) {
         let kind = goal.kind;
         let restarted = self.light_stop_evidence.has("go") || self.light_stop_state == Some("passed");
         let after_light = kind == "finish" && restarted;
@@ -708,9 +711,12 @@ impl Maneuver {
                 feedback.set("observed_end_board_range_m", observed);
             }
         }
-        if basis.is_some() {
-            return (basis, feedback);
+        if after_light && self.race_inputs.is_some()
+            && (self.finish.race_brake.is_active() || self.finish.creeping
+                || (!body_in_zone && gap.is_some_and(|g| g > goal.min_gap + goal.creep_travel))) {
+            basis = None;
         }
+        if basis.is_some() { return (basis, feedback); }
         let launching = self.finish.launch_until.is_some_and(|until| now < until);
         if after_light && let Some(input) = self.race_inputs {
             // User, 11-11: while moving, reduce forward PWM rather than
@@ -718,70 +724,103 @@ impl Maneuver {
             // Keep the existing launch cutoff, then use race cruise/1530 until the
             // finish's own continuous brake. Its boundary also runs at 20 ms.
             let current = fused.map_or(v_aim, |f| f.0);
-            let current = if self.field_course_active() && self.field_map.two_measured_axes(scan) {
-                // End-board references may swap during glare. A separately
-                // measured closing speed also feeds the same single brake.
-                self.field_map.axis_speed(scan).map_or(current, |v| current.max(v))
+            let map_speed = if self.field_course_active() && self.field_map.two_measured_axes(scan) {
+                self.field_map.axis_speed(scan)
+            } else { None };
+            // A dip in the IMU integral can understate the
+            // closing speed. Project the measured end-board slope through its
+            // sampling window using the current command and its measured drag.
+            let brake_model = crate::race_light_brake::BrakeModel::finish(decel);
+            let raw_board = !self.finish.race_brake.is_used();
+            let end_board_speed = self.finish.race_brake.observe_range_speed(now, speed.filter(|_| raw_board),
+                &self.finish.ranges, decel, brake_model);
+            // Only guard 2-scan corner-chord startup noise; once >= 3 scans establish the board slope,
+            // trust the IMU-free lidar speed directly so negative IMU spikes cannot delay finish braking.
+            let guarded_board = end_board_speed.map(|eb| {
+                if let Some(m) = map_speed {
+                    eb.min(m + 0.08)
+                } else if self.finish.ranges.len() >= 4 {
+                    eb
+                } else {
+                    eb.min(current + 0.15)
+                }
+            });
+            let mut current = if self.finish.race_brake.is_active()
+                && end_board_speed.is_some_and(|eb| eb <= crate::race_light_brake::BRAKE_REST_MPS)
+                && map_speed.is_none_or(|m| m <= 0.06)
+            {
+                end_board_speed.unwrap().max(map_speed.unwrap_or(0.))
             } else {
-                current
+                [Some(current), map_speed, guarded_board]
+                    .into_iter().flatten().fold(0., f64::max)
             };
-            if self.finish.launch_from.is_some()
-                && (!launching || stop_gap.is_some_and(|s| s <= goal.target_gap)
-                    || worst_gap.is_some_and(|s| s <= goal.min_gap)) {
+            let pullup_speed = self.finish.pullup_imu_zero.zip(input.forward_integral)
+                .map(|(start, now)| (now-start).max(0.));
+            if self.finish.creeping && let Some(v) = pullup_speed {
+                current = current.max(v);
+            }
+            if self.finish.launch_from.is_some() && !launching {
                 self.finish.launch_until = None;
                 self.finish.launch_from = None;
             }
-            self.finish.race_brake.set_release_over_gap(Some(goal.body_gap));
+            let pullup_measured = [speed, pullup_speed].into_iter().flatten().reduce(f64::max);
+            self.finish.race_brake.resume_after_forward(applied_motor, pullup_measured);
+            let power_accel = applied_motor.filter(|&pwm| pwm > NEUTRAL).and_then(|pwm| {
+                self.race_surface.predicted_drive_accel(pwm, Some(current), now)
+                    .or_else(|| if pwm >= START_LAUNCH_MOTOR { Some(5.05) } else if pwm >= 1600 { Some(4.14) } else { Some(1.5) })
+            }).unwrap_or(0.).max(0.);
+            let power_tail = if self.finish.race_brake.is_active() || self.finish.creeping {
+                0.
+            } else {
+                let delay = 0.056;
+                let v_peak = current + power_accel * delay;
+                let true_stop = 0.5 * (current + v_peak) * delay + brake_model.distance(v_peak);
+                (true_stop - brake_model.stop_travel(current, 0.)).max(0.)
+            };
+            let target = if self.finish.creeping { goal.body_gap - LIDAR_RANGE_ALLOWANCE_M } else { 0.27 + power_tail };
+            if self.finish.creeping && current > crate::race_light_brake::BRAKE_REST_MPS
+                && gap.is_some_and(|g| g <= target) {
+                self.finish.race_brake.begin_stop(now);
+            }
             self.finish.race_brake.observe(now, gap, Some(current), input.forward_integral,
-                1., decel, crate::race_light_brake::BrakeModel::finish(decel), goal.target_gap);
+                1., decel, brake_model, target);
+            if self.finish.race_brake.is_active() && body_in_zone && current <= 0.03 {
+                self.finish.race_brake.release_at_rest(now);
+            }
             let motor = self.finish.race_brake_motor(now, input.forward_integral).unwrap_or_else(|| {
                 if self.finish.race_brake.is_used() {
-                    let frames = if self.finish.creeping { LANE_CREEP_FRAMES } else { LANE_KICK_FRAMES };
-                    if self.finish.pulse > 0 {
-                        if self.finish.pulse < frames && !body_in_zone {
-                            self.finish.pulse += 1;
-                            TRIAL_MOTOR
-                        } else {
-                            self.finish.pulse = 0;
-                            self.finish.creeping = false;
-                            NEUTRAL
-                        }
-                    } else {
-                        let brake_settled = self.finish.brake_end.is_none_or(|e| now - e >= 0.3);
-                        let can_creep = in_zone && !body_in_zone
-                            && gap.is_some_and(|g| g >= goal.min_gap + goal.creep_travel)
-                            && self.finish.creeps < goal.creep_max;
-                        if speed_known && stopped && brake_settled && rested && !body_in_zone {
-                            if can_creep {
-                                self.finish.creeping = true;
-                                self.finish.creeps += 1;
-                                self.finish.pulse = 1;
-                                TRIAL_MOTOR
-                            } else if kick_room {
-                                self.finish.creeping = false;
-                                self.finish.pulse = 1;
-                                TRIAL_MOTOR
-                            } else {
-                                NEUTRAL
-                            }
-                        } else {
-                            NEUTRAL
-                        }
+                    let settled = self.finish.brake_end.is_none_or(|e| now - e >= 0.3);
+                    if !self.finish.creeping && settled && speed_known && stopped && rested
+                        && !body_in_zone && (creep_room || kick_room) {
+                        self.finish.creeping = true;
+                        self.finish.pullup_imu_zero = input.forward_integral;
+                        self.finish.creeps += 1;
                     }
-                } else if self.finish.launch_until.is_some() {
-                    LIGHT_LAUNCH_MOTOR
-                } else if gap.is_some_and(|g| g <= goal.target_gap + current * ESC_COAST_DELAY_S
-                    + crate::race_light_brake::BrakeModel::finish(decel).stop_travel(current, 0.)) {
+                    if !self.finish.creeping { NEUTRAL }
+                    else if pullup_measured.is_some_and(|v| v >= LANE_SPEED_RESTART_MPS) { ROLLING_HOLD_MOTOR }
+                    else { TRIAL_MOTOR }
+                } else if self.finish.creeping {
                     ROLLING_HOLD_MOTOR
-                } else {
+                } else if self.compass.current(scan).is_some_and(|h| wrap(h).abs() > 0.13)
+                    || current >= 2.75
+                    || gap.is_some_and(|g| g <= 1.80)
+                {
                     RACE_CRUISE_MOTOR
+                } else if self.finish.launch_from.is_some_and(|t0| now - t0 >= 0.58)
+                    || current >= 2.58
+                    || gap.is_some_and(|g| g <= 2.00)
+                {
+                    1600
+                } else {
+                    LIGHT_LAUNCH_MOTOR
                 }
             });
             self.lane_motor = motor;
-            self.finish.holding = matches!(motor, RACE_CRUISE_MOTOR | ROLLING_HOLD_MOTOR);
-            if !self.finish.race_brake.is_used() {
-                self.finish.pulse = 0;
+            self.finish.holding = matches!(motor, 1600 | RACE_CRUISE_MOTOR | ROLLING_HOLD_MOTOR);
+            if motor == LANE_BRAKE_MOTOR {
+                self.finish.pullup_imu_zero = None;
                 self.finish.creeping = false;
+                self.finish.pulse = 0;
             }
             self._lane_topup_motor = None;
             feedback.set("motor", motor);

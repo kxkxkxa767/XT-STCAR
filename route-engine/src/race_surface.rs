@@ -11,7 +11,7 @@ use crate::py::V;
 // y65: the indoor coast decel of y57-y64 pooled, IMU pairs .588 (n 86) and the lidar coast
 // fits .615 (n 46); y57 had .574 from y53.
 const REFERENCE_COAST_MPS2: f64 = 0.60;
-const REFERENCE_ACCEL_MAX_MPS2: f64 = 4.14;
+const REFERENCE_ACCEL_MAX_MPS2: f64 = 5.05;
 const FILTER_RESPONSE_S: f64 = 1.0;
 const COMPENSATION_PWM_PER_S: f64 = 20.0;
 const LEARNING_MIN_SPEED_MPS: f64 = 0.2;
@@ -30,10 +30,11 @@ const REST_MIN_WINDOW_S: f64 = 1.0;
 // residual .079 m/s2); y53's 1.598 m/s made every 1550 sample above 1.6 m/s read -.1 to -.3 and
 // pulled the learned load to 0 after the crosswalk. y53's 1560 anchor (1.600 m/s, weaker than
 // 1550) has no gated sample in y57-y64, so 1555-1565 are interpolated between 1550 and 1570.
-const RESPONSE: [(i64, f64, f64); 3] = [
+const RESPONSE: [(i64, f64, f64); 4] = [
     (1550, 1.814, 2.98),
     (1570, 2.340, 1.00),
     (1600, 3.837, 0.70),
+    (1650, 5.800, 0.70),
 ];
 
 fn reference_acceleration(pwm: i64, speed: f64) -> f64 {

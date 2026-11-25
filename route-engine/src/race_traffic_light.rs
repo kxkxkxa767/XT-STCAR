@@ -14,6 +14,7 @@ pub(crate) struct Observation {
     pub frame: i64,
     pub captured_mono_s: f64,
     pub lights: Lights,
+    pub housing_lip: Option<f64>,
     pub compute_ms: f64,
     pub pinned_cpu: Option<usize>,
 }
@@ -97,6 +98,7 @@ pub(crate) fn spawn(
                     frame,
                     captured_mono_s,
                     lights,
+                    housing_lip: crate::traffic_lamp::housing_lip(pixels,w,h),
                     pinned_cpu,
                     compute_ms: start.elapsed().as_secs_f64() * 1000.,
                 };

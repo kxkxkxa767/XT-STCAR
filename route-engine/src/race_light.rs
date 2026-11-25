@@ -10,6 +10,8 @@ use crate::py::V;
 use crate::motion_sensors::{RangeHistory, lane_range_speed};
 use crate::maneuver::{LANE_SPEED_BASELINE, LANE_SPEED_HISTORY};
 use crate::race_speed_kalman::SpeedKalman;
+#[path = "race_light_trim.rs"]
+pub(crate) mod trim;
 
 fn vote(votes: &mut [(u32, f64); 2], value: f64) {
     if let Some((n, mean)) = votes.iter_mut()
@@ -146,12 +148,40 @@ impl EntryMotionSpeed {
             "body_speed_mps" => self.speed(now, integral),
             "basis" => "fresh_cone_center_displacement_imu_yaw_midpoint_to_current"}
     }
+
+    /// Current interval only: do not transport older intervals through the
+    /// same turning accelerometer drift that this measurement is checking.
+    pub fn measured_this_scan(&self, seq: i64) -> Option<f64> {
+        let p = self.previous.as_ref().filter(|p|p.seq==seq)?;
+        self.anchors.iter().flatten().find(|&&(t,_,_)|t==p.at).map(|&(_,v,_)|v)
+    }
 }
 
 #[cfg(test)]
 mod entry_motion_tests {
     use super::*;
     use crate::motion_sensors::RaceInputs;
+
+    #[test]
+    fn reference_change_never_interpolates_different_origins() {
+        let mut r=RaceLight::default();
+        let sample=|r:&mut RaceLight,t:f64,g:f64,source,v| {
+            r.opening_source=Some(source);r.opening_sample=Some(OpeningSample{at:t,ahead:g+1.19,speed:Some(v)});
+            r.observe_beam(t,Some(g));
+        };
+        sample(&mut r,13.383,2.52,"surveyed_finish_opening",2.0);
+        sample(&mut r,13.581,-1.43,"end_board_to_measured_opening",2.2);
+        assert!(r.beam_at.is_none());
+        sample(&mut r,13.681,1.91,"end_board_to_measured_opening",2.2);
+        assert!(r.beam_at.is_none());
+        sample(&mut r,14.6,0.08,"surveyed_finish_opening",1.2);
+        sample(&mut r,14.7,-0.02,"confirmed_gantry_stations",1.2);
+        // Current plane at the previous pose: -.02+.12=.10, not the old .08.
+        let t=r.beam_at.unwrap();assert!((t-(14.6+0.1*0.10/0.12)).abs()<1e-9);
+        assert_eq!(r.beam_basis,Some("motion_transported_wheel_bracket"));
+        r.observe_beam(15.,None);sample(&mut r,16.,0.14,"visible_divider_opening",0.);
+        assert_eq!(r.beam_at,Some(t));
+    }
 
     #[test]
     fn a_fresh_cone_corrects_a_missing_gantry_speed_without_renewing_missing_samples() {
@@ -318,6 +348,42 @@ pub(crate) fn observed_end_wall(scan: &V, heading: f64) -> Option<f64> {
     ScanAxis::new(scan, heading)?.end_wall()
 }
 
+/// Looking down the finish lane, the *right* board runs downstream from the
+/// opening. At its upstream tip neighbouring clockwise rays must actually go
+/// through the opening. The first point of a truncated line fit isn't a tip.
+fn right_opening_tip(scan:&V,heading:f64,outer:f64,body:f64,yaw:f64)->Option<(f64,f64)> {
+    let r=scan.get("ranges").ol().filter(|v|v.len()==360)?;
+    let ages=scan.get("point_age_ms").ol();
+    let point=|i:usize| {
+        let d=r[i].of()?;let age=ages.and_then(|v|v.get(i)).and_then(V::of).unwrap_or(0.).clamp(0.,150.)/1000.;
+        let (s,c)=((i as f64).to_radians()-heading+yaw*age).sin_cos();
+        let (sy,cy)=(heading-0.5*yaw*age).sin_cos();
+        Some((d*c-body*age*cy,-d*s-body*age*sy))
+    };
+    let mut best:Option<(f64,f64)>=None;
+    for i in 0..360 {
+        let Some(d)=r[i].of() else{continue};
+        if !r[(i+1)%360].of().is_some_and(|n|n-d>LIGHT_POST_JUMP_M) {continue}
+        let (x,y)=point(i)?;
+        if y>=-SIDE_BODY_EXTENT_M || !(OPEN_LANE_WIDTH_M.0..=OPEN_LANE_WIDTH_M.1).contains(&(outer-y)){continue}
+        if (1..=3).filter_map(|k|point((i+k)%360)).filter(|p|p.1<y-LIGHT_LINE_JUMP_M).count()<2 {continue}
+        let mut count=1;let mut far=x;
+        for k in 1..=40 {
+            let Some((u,v))=point((i+360-k)%360) else {break};
+            if (v-y).abs()>crate::helpers::OPEN_LINE_BAND_M || u<x-crate::helpers::OPEN_LINE_BAND_M {break}
+            count+=1;far=far.max(u);
+            if count>=3 && far-x>=OPEN_LANE_MIN_SPAN_M {break}
+        }
+        if count<3 || far-x<OPEN_LANE_MIN_SPAN_M {continue}
+        if best.is_some_and(|(u,_)|(u-x).abs()>LIGHT_LINE_JUMP_M){return None}
+        best=Some((x,y));
+    }
+    best
+}
+
+#[derive(Clone,Copy,Debug)]
+struct TipFix { at:f64, ahead:f64, side:f64, map:Option<f64>, confirmed:bool }
+
 impl<'a> ScanAxis<'a> {
     fn new(scan: &'a V, heading: f64) -> Option<Self> {
         let r = scan.get("ranges");
@@ -440,8 +506,44 @@ struct LightRest {
     max_range: f64,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct OpeningSupport {
+    pub mapped: Option<f64>,       // current two-axis board fix consistent with the IMU prior
+    pub station: Option<f64>,      // positively identified gantry, not an arbitrary post
+    pub live_legs: bool,
+    pub sees_both_stations: bool,
+    pub axis_speed: Option<f64>,
+    pub edge: Option<f64>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct OpeningSample { at: f64, ahead: f64, speed: Option<f64> }
+
+impl OpeningSample {
+    fn fits(self, at: f64, ahead: f64, speed: Option<f64>) -> bool {
+        let dt = at-self.at;
+        let travel = self.ahead-ahead;
+        match self.speed.zip(speed).map(|(a,b)| (a+b)*0.5).or(speed).or(self.speed) {
+            Some(v) => (travel-v*dt).abs() <= LIGHT_LINE_JUMP_M,
+            None => (-LIGHT_LINE_JUMP_M..=crate::maneuver::LANE_MAX_CLOSING_MPS*dt+LIGHT_LINE_JUMP_M).contains(&travel),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct BeamSample {
+    at: f64,
+    gap: f64,
+    source: &'static str,
+    wheel_extent: f64,
+    axis_speed: Option<f64>,
+}
+
 #[derive(Clone, Default, Debug)]
 pub struct RaceLight {
+    pub trim: trim::Trim,
+    tip_fix: Option<TipFix>,
+    pub raw_tip: Option<f64>,
     pub entry_motion: EntryMotionSpeed,
     pub entry_tracker: Option<CompactTargetTracker>,
     votes: [(u32, f64); 2],
@@ -453,12 +555,18 @@ pub struct RaceLight {
     last_seq: Option<i64>,
     pub phase: LightRoll,
     pub prior_ahead: Option<f64>,
+    prior_from_cone: bool,
     opening_spans: [(u32, f64); 2],
     opening_seq: Option<i64>,
+    opening_sample: Option<OpeningSample>,
+    direct_station: Option<OpeningSample>,
+    station_offset: Option<f64>,
+    pub opening_rebased: bool,
     pub opening_source: Option<&'static str>,
+    pub prev_opening_source: Option<&'static str>,
     pub completing_zone_stop: bool,
     pub front_wheel_gap_m: Option<f64>,
-    previous_beam_gap: Option<(f64, f64)>,
+    previous_beam_gap: Option<BeamSample>,
     rest: Option<LightRest>,
     pub ranges: RangeHistory,
     pub speed_uses_gantry: bool,
@@ -469,10 +577,36 @@ pub struct RaceLight {
     speed_from_cone: bool,
     /// When the front was first estimated past the photo beam (y34).
     pub beam_at: Option<f64>,
+    pub beam_basis: Option<&'static str>,
     approach_sample: Option<(i64, f64, Option<f64>)>,
 }
 
 impl RaceLight {
+    /// Anchor the surveyed plane to the actual edge this run. Only relative
+    /// displacement is carried across a brief dropout. Missing scans don't refresh it.
+    pub fn observe_lane_tip(&mut self,scan:&V,h:f64,lane:&V,map:Option<f64>,body:f64,yaw:f64,axis_v:Option<f64>)->Option<f64> {
+        let at=scan.get("received_at").of()?;
+        let old=self.tip_fix;
+        let tip=lane.get("outer_lateral_m").of().filter(|&o|h.abs()<=crate::maneuver::open_lane_entry_heading_rad()
+            && lane.get("width_m").of().is_some_and(|w|(0. ..=w).contains(&o)))
+            .and_then(|o|right_opening_tip(scan,h,o,body,yaw))
+            .filter(|&(x,_)|!at_predicted_beam(x,map));
+        self.raw_tip=tip.map(|v|v.0);
+        if let Some((ahead,side))=tip {
+            if old.is_none_or(|s|s.at!=at) {
+                let confirmed=old.is_some_and(|s| {
+                    let dt=at-s.at;let travel=s.map.zip(map).map(|(a,b)|a-b).or_else(||axis_v.map(|v|v*dt));
+                    dt>0. && dt<=crate::helpers::SCAN_AGE_S && (side-s.side).abs()<=LIGHT_LINE_JUMP_M
+                        && travel.is_some_and(|dx|(s.ahead-ahead-dx).abs()<=LIGHT_POST_JUMP_M)
+                });
+                self.tip_fix=Some(TipFix{at,ahead,side,map,confirmed});
+            }
+            if self.tip_fix.is_some_and(|s|s.confirmed){return Some(ahead)}
+        }
+        let f=old.filter(|s|s.confirmed && (0. ..=crate::helpers::SCAN_AGE_S).contains(&(at-s.at)))?;
+        Some(f.ahead + (map?-f.map?))
+    }
+
     /// The upstream end of the finish divider is the gantry plane. Pair a
     /// visible tip with the end board so it can leave the laser's field of view.
     pub fn opening_ahead(
@@ -480,9 +614,30 @@ impl RaceLight {
         scan: &V,
         heading: f64,
         lane: &V,
-        map: Option<f64>,
-        legs: Option<f64>,
+        support: OpeningSupport,
     ) -> Option<f64> {
+        let OpeningSupport { mapped, station, live_legs, sees_both_stations, axis_speed, edge } = support;
+        let at = scan.idx("received_at").f();
+        let last = self.opening_sample.filter(|s| (0. ..=crate::helpers::SCAN_AGE_S).contains(&(at-s.at)));
+        let consistent = |d: f64| last.is_none_or(|s|s.fits(at,d,axis_speed));
+        // A continuous but misplaced survey must not lock out an identified physical
+        // station indefinitely. Two fresh leg measurements can establish a different
+        // origin using THEIR displacement, never the step from the survey to the legs.
+        let live = station.filter(|_|live_legs);
+        // A leg classified FROM the old divider is not an independent witness to
+        // overturn that divider. Require this scan's spacing or its actual board tip.
+        let identified = live.filter(|d| sees_both_stations || lane.get("divider_corner_along_m").of()
+            .is_some_and(|tip|(d-tip).abs()<=LIGHT_LINE_JUMP_M));
+        let station_motion=identified.zip(self.direct_station).is_some_and(|(d,s)|
+            at>s.at && at-s.at<=crate::helpers::SCAN_AGE_S && s.fits(at,d,axis_speed));
+        self.opening_rebased = station_motion && identified.is_some_and(|d|!consistent(d));
+        if station_motion && sees_both_stations && let Some((d,g))=live.zip(mapped) {
+            let offset=d-g;
+            self.station_offset=Some(self.station_offset.filter(|b|(b-offset).abs()<LIGHT_LINE_JUMP_M)
+                .map_or(offset,|b|0.5*(offset+b)));
+        }
+        self.direct_station = identified.map(|ahead| OpeningSample{at,ahead,speed:axis_speed});
+        if self.opening_rebased { self.previous_beam_gap=None; }
         // During the entry turn, central rays can hit the near face of the
         // divider. Only subtract its length when looking down the actual lane.
         let along_lane = heading.abs() <= crate::maneuver::open_lane_entry_heading_rad();
@@ -492,34 +647,59 @@ impl RaceLight {
             .zip(lane.get("width_m").of())
             .is_some_and(|(outer, width)| (0.0..=width).contains(&outer));
         let wall = (along_lane && in_lane).then(|| observed_end_wall(scan, heading)).flatten();
+        let same = |a:f64,b:f64| (a-b).abs() <= LIGHT_LINE_JUMP_M;
+        // A truncated fitted line is not necessarily the end of the divider. Pair it
+        // only when its observed near end agrees with another opening observation.
         let tip = lane.get("divider_corner_along_m").of().or_else(|| {
             lane.get("inner_start_along_m")
                 .of()
-                .filter(|d| *d > 0. && lane.get("inner_source").os() != Some("surveyed_divider"))
+                .filter(|d| *d > 0. && lane.get("inner_source").os() == Some("raw_returns")
+                    && station.or(mapped).or(self.prior_ahead).is_some_and(|a| same(a,*d)))
         });
         let seq = scan.get("seq").oi();
         if seq != self.opening_seq {
             self.opening_seq = seq;
             if let Some(span) =
-                wall.zip(legs.or(tip)).map(|(w, opening)| w - opening).filter(|d| *d > OPEN_LANE_MIN_SPAN_M)
+                wall.zip(live.filter(|&d|consistent(d) || self.opening_rebased).or(tip.filter(|&d|consistent(d))))
+                    .map(|(w, opening)| w - opening).filter(|d| *d > OPEN_LANE_MIN_SPAN_M)
             {
                 vote(&mut self.opening_spans, span);
             }
         }
-        let wall_opening =
-            wall.zip(self.landmark().or_else(|| voted(self.opening_spans))).map(|(w, (_, span))| w - span);
-        let measured = legs
-            .map(|v| (v, "confirmed_gantry_stations"))
-            .or_else(|| wall_opening.map(|v| (v, "end_board_to_measured_opening")));
-        let position = map
-            .filter(|v| measured.is_none_or(|(seen, _)| (seen - v).abs() <= LIGHT_LINE_JUMP_M))
-            .map(|v| (v, "surveyed_finish_opening"))
-            .or(measured)
-            .or_else(|| {
-                (along_lane && in_lane).then_some(self.prior_ahead).flatten().map(|v| (v, "tracked_divider_opening"))
-            })
-            .or_else(|| along_lane.then_some(tip).flatten().map(|v| (v, "visible_divider_opening")));
+        let local_span = voted(self.opening_spans);
+        let wall_opening = wall.zip(local_span.or_else(|| self.landmark())).map(|(w, (_, span))| w-span);
+        let map = mapped.filter(|&d|consistent(d));
+        let station = station.filter(|&d|consistent(d) || self.opening_rebased);
+        let tip = along_lane.then_some(tip).flatten().filter(|&d|consistent(d));
+        let from_wall = wall_opening.filter(|&d|consistent(d));
+        // Keep the common surveyed frame while supported. A directly identified plane
+        // can correct the survey. A remote wall minus an old span cannot outvote both
+        // the current wall fix and the displacement since the last accepted opening.
+        let physical = station.filter(|_|live_legs).map(|d|(d,"confirmed_gantry_stations"))
+            .or_else(|| tip.map(|d|(d,"visible_divider_opening")))
+            .or_else(|| local_span.and(from_wall).map(|d|(d,"end_board_to_measured_opening")));
+        let position = map.filter(|&d|physical.is_none_or(|(v,_)|same(d,v)))
+            .map(|d|(d,"surveyed_finish_opening"))
+            .or(physical)
+            .or_else(|| station.map(|d|(d,"confirmed_gantry_stations")))
+            .or_else(|| (along_lane && in_lane && self.prior_from_cone).then_some(self.prior_ahead).flatten()
+                .filter(|&d|consistent(d)).map(|d|(d,"tracked_divider_opening")))
+            .or_else(|| from_wall.map(|d|(d,"end_board_to_measured_opening")));
+        // Matching within the association window is not the same as sharing a
+        // longitudinal origin. Keep a repeatedly observed station's actual
+        // offset when the map supplies subsequent motion (even when <25 cm).
+        let calibrated=mapped.zip(self.station_offset).filter(|(_,b)|b.abs()>crate::helpers::OPEN_LINE_BAND_M)
+            .map(|(g,b)|g+b).filter(|d|consistent(*d)||station_motion);
+        let position=if let Some(d)=calibrated.filter(|_|sees_both_stations || edge.is_none()) {
+            Some((d,"registered_station_opening"))
+        } else if let Some(d)=edge.filter(|x|(!sees_both_stations || !live_legs)
+            && map.is_none_or(|g|(g-x).abs()>crate::helpers::OPEN_LINE_BAND_M)) {
+            let source=if self.raw_tip.is_some() {"measured_right_board_opening"} else {"carried_right_board_opening"};
+            self.opening_rebased |= !consistent(d);
+            Some((d,source))
+        }else{position};
         self.opening_source = position.map(|(_, source)| source);
+        if let Some((ahead,_)) = position {self.opening_sample = Some(OpeningSample{at,ahead,speed:axis_speed});}
         position.map(|(ahead, _)| ahead)
     }
 
@@ -530,15 +710,32 @@ impl RaceLight {
         if self.beam_at.is_some() {
             return;
         }
-        if let Some(gap) = wheel_gap {
-            if gap <= 0. {
-                let crossed = self
-                    .previous_beam_gap
-                    .filter(|(t, g)| *g > 0. && at > *t && at - t <= crate::helpers::SCAN_AGE_S)
-                    .map_or(at, |(t, g)| t + (at - t) * g / (g - gap));
-                self.beam_at = Some(crossed);
+        if let (Some(gap), Some(source), Some(o)) = (wheel_gap, self.opening_source, self.opening_sample) {
+            let extent = o.ahead - crate::maneuver::LIGHT_SENSOR_TO_GANTRY_M - gap;
+            if let Some(old) = self.previous_beam_gap && gap <= 0. && at > old.at && at-old.at <= crate::helpers::SCAN_AGE_S {
+                let dt = at-old.at;
+                let travel = old.axis_speed.zip(o.speed).map(|(a,b)| (a+b)*0.5*dt + extent-old.wheel_extent);
+                let sane = (gap-old.gap).abs() <= crate::maneuver::LANE_MAX_CLOSING_MPS*dt + LIGHT_GANTRY_EDGE_M;
+                if old.source == source && sane && old.gap <= 0. {
+                    // Reacquisition downstream: the first confirmed inside observation,
+                    // not a crossing backdated over a blind interval.
+                    self.beam_at=Some(old.at);
+                    self.beam_basis=Some("confirmed_inside_after_reacquisition");
+                } else if old.gap>0. {
+                    // On a switch, transport THIS plane to the preceding wheel pose.
+                    // Don't interpolate two raw gaps with different origins.
+                    let before = if old.source==source && sane {
+                        travel.is_none_or(|d| d>0. && (old.gap-gap-d).abs()<=LIGHT_GANTRY_EDGE_M).then_some(old.gap)
+                    } else {
+                        travel.map(|d|gap+d).filter(|b| *b>0. && (*b-old.gap).abs()<=LIGHT_GANTRY_EDGE_M)
+                    };
+                    if let Some(b) = before {
+                        self.beam_at=Some(old.at+dt*b/(b-gap));
+                        self.beam_basis=Some(if old.source==source {"same_plane_wheel_bracket"} else {"motion_transported_wheel_bracket"});
+                    }
+                }
             }
-            self.previous_beam_gap = Some((at, gap));
+            self.previous_beam_gap = Some(BeamSample{at,gap,source,wheel_extent:extent,axis_speed:o.speed});
         } else {
             self.previous_beam_gap = None;
         }
@@ -546,7 +743,7 @@ impl RaceLight {
 
     /// A neutral acknowledgement and a stable measured longitudinal range
     /// distinguish a stop from rolling slowly through the zone on an expired timer.
-    pub fn stationary_in_zone(&mut self, at: f64, sample: Option<(&'static str, f64)>) -> bool {
+    pub fn stationary_in_zone(&mut self, at: f64, sample: Option<(&'static str, f64)>, stable_s: f64) -> bool {
         let Some((reference, range)) = sample else {
             self.rest = None;
             return false;
@@ -566,7 +763,7 @@ impl RaceLight {
             w.min_range = min_range;
             w.max_range = max_range;
         }
-        at - w.first >= crate::coast::MIN_RECEIVE_STABLE_S
+        at - w.first >= stable_s
     }
 
     /// Divide by sequence distance if a scan was skipped.
@@ -792,7 +989,7 @@ impl RaceLight {
                 self.observe_second(scan, now, heading, &target, &V::None, input);
             }
         }
-        self.prior_ahead = if voted(self.second_gap).is_some() {
+        let carried = if voted(self.second_gap).is_some() {
             self.gap_position.as_mut().and_then(|p| {
                 if !(0. ..=crate::race_speed_kalman::BRIDGE_S).contains(&(now - p.observed_at)) { return None; }
                 let current = self.entry_motion.speed(now, input.forward_integral).map(|v| v * heading.cos());
@@ -805,7 +1002,9 @@ impl RaceLight {
             })
         } else {
             None
-        }.or_else(|| self.landmark().and_then(|(_, span)| Some(observed_end_wall(scan, heading)? - span)));
+        };
+        self.prior_from_cone = carried.is_some();
+        self.prior_ahead = carried.or_else(|| self.landmark().and_then(|(_, span)| Some(observed_end_wall(scan, heading)? - span)));
         self.prior_ahead
     }
 

@@ -652,8 +652,20 @@ impl Locator {
         Some((self.speed * self.current(scan)?.pose.yaw_rad.cos()).max(0.))
     }
 
+    pub fn body_speed(&self, scan: &V) -> Option<f64> {
+        self.current(scan)?;
+        Some(self.speed.max(0.))
+    }
+
     pub fn two_measured_axes(&self, scan: &V) -> bool {
         self.current(scan).is_some() && self.support.iter().all(|&n| n >= 4)
+    }
+
+    /// For longitudinal decisions a carried map coordinate isn't a fresh wall fix.
+    pub fn motion_supported(&self, scan: &V) -> bool {
+        self.two_measured_axes(scan) && self.current(scan).zip(self.prediction).is_some_and(|(f,p)|
+            (f.pose.x_m-p.x_m).hypot(f.pose.y_m-p.y_m) <= crate::maneuver::LIGHT_LINE_JUMP_M
+            && crate::py::wrap(f.pose.yaw_rad-p.yaw_rad).abs() <= crate::maneuver::open_lane_entry_heading_rad())
     }
 
     pub fn missing_fraction(&self) -> f64 {
@@ -809,7 +821,7 @@ mod tests {
     use crate::helpers::WallCompass;
 
     #[test]
-    fn surveyed_brake_coast_registers_a_measured_light_stop_without_colour() {
+    fn surveyed_brake_registers_a_measured_light_stop_without_colour() {
         use crate::helpers::FRONT_BODY_EXTENT_M;
         use crate::maneuver::Maneuver;
         use crate::race_light_brake::BrakeModel;
@@ -830,18 +842,21 @@ mod tests {
         const WAIT: f64 = 7.;
         approach.race_light_wait_s = Some(WAIT);
 
-        // The brake remains applied until the projected coast ends inside the surveyed zone.
+        // The moving vehicle stays on its single brake even after entering the zone.
         let brake = &mut approach.race_light_brake;
         for i in 0..=4 {
             let dt = i as f64 / 10.;
             let speed = 1.30 - 1.875 * dt;
             let gap = 1.43 - 1.30 * dt + 0.9375 * dt * dt;
             let integral = Some(speed - 1.30);
-            brake.set_surveyed_release_zone((gap <= 1.10).then_some(0.72));
             brake.observe(1. + dt, Some(gap), Some(speed), integral, 1., 0.35, BrakeModel::light(1., 0.35), 0.55);
-            assert_eq!(brake.command(1. + dt, integral), Some(if i == 4 { 1500 } else { 1300 }));
+            assert_eq!(brake.command(1. + dt, integral), Some(1300));
         }
-        assert_eq!(brake.diagnostics().get("end_reason").os(), Some("coast_reaches_zone"));
+        for t in [1.8, 1.92] {
+            brake.observe(t, Some(0.55), Some(0.), Some(-1.3), 1., 0.35, BrakeModel::light(1., 0.35), 0.55);
+            brake.command(t, Some(-1.3));
+        }
+        assert_eq!(brake.diagnostics().get("end_reason").os(), Some("stopped"));
 
         let scan = |at: f64| crate::dict! { "seq" => (at * 10.).round() as i64, "at_ms" => (at * 1000.).round() as i64,
             "received_at" => at, "ranges" => vec![V::Float(3.); 360] };
@@ -859,7 +874,7 @@ mod tests {
                 let t=at+0.1*f64::from(i);
                 m.compass.heading=Some(0.);m.compass.at_s=Some(t);m.compass.measured_at_s=Some(t);
                 m.race_light.ranges=vec![(t-0.2,t-0.2,ahead+0.2*speed),(t-0.1,t-0.1,ahead+0.1*speed)];
-                let (basis,fb)=m.light_approach_control(&scan(t),Some(ahead),t,&crate::dict!{"motor"=>1500});
+                let (basis,fb)=m.light_approach_control(&scan(t),Some(ahead),t,&crate::dict!{"motor"=>1500,"command_acked"=>true});
                 if let Some(b)=basis { m.lane_feedback=fb;m.light_stop_reached(&scan(t),t,&V::None,&b);stop=Some(t);break; }
             }
             assert_eq!(stop.is_some(),should_wait,"gap={gap} speed={speed}");

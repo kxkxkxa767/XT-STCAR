@@ -65,7 +65,7 @@ impl Filter {
             {
                 let delta = next - prev;
                 let accel = delta / dt;
-                if accel.abs() > 4.8 && (accel - r.accel).abs() > 4.8 {
+                if accel.abs() > 6.6 && (accel - r.accel).abs() > 5.8 {
                     self.offset += r.accel * dt - delta;
                     self.accel_replaced = true;
                     self.suspect_dv = true;

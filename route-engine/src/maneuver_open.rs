@@ -226,6 +226,7 @@ impl Maneuver {
             self.phase = "drive";
             self.drive_since = Some(now);
             self.presteer_ended_at = Some(now);
+            if self.race_program { self._start_motor = START_LAUNCH_MOTOR; }
             self.reason = "start_lane_drive".into();
             let evidence = self.start_lane_feedback.clone();
             self.route_event("start_lane", scan, control, evidence);
@@ -456,7 +457,7 @@ impl Maneuver {
                 LANE_POWER_ACCEL_MPS2
             } else if self._power_cmd_motor == Some(STRAIGHT_MOTOR) {
                 STRAIGHT_ACCEL_MAX_MPS2
-            } else if self._power_cmd_motor == Some(START_LAUNCH_MOTOR) {
+            } else if self._power_cmd_motor.is_some_and(|motor| self.is_lane_launch_motor(motor)) {
                 START_LAUNCH_ACCEL_MPS2
             } else {
                 0.
@@ -475,7 +476,8 @@ impl Maneuver {
             let base = if let Some(s) = speed {
                 s
             } else if let Some((at, value)) = held.filter(|(at, _)| {
-                self._power_cmd_motor == Some(START_LAUNCH_MOTOR) && 0. <= now - at && now - at <= LANE_SPEED_HOLD_S
+                self._power_cmd_motor.is_some_and(|motor| self.is_lane_launch_motor(motor))
+                    && 0. <= now - at && now - at <= LANE_SPEED_HOLD_S
             }) {
                 let _ = at;
                 value + LANE_SPEED_HOLD_MARGIN_MPS
@@ -509,7 +511,10 @@ impl Maneuver {
                 // so a start-long integral cut early and also vetoed the top-up.
                 // A fresh rear-radar anchor already corrects the slope's lag;
                 // add only the propulsion still pending after this current speed.
-                let vc = match self.race_inputs.and_then(|i| self.race_surface_speed.speed(now, i.forward_integral)) {
+                let vc = match self.race_inputs.and_then(|i| {
+                    self.race_surface_speed.speed(now, i.forward_integral)
+                        .or_else(|| self.race_crosswalk_stop.imu_speed(i.forward_integral))
+                }) {
                     Some(current) => {
                         let response = crate::race_crosswalk_stop::IMU_POWER_RESPONSE_S;
                         let tail = |command_at: Option<f64>| command_at.map_or(0., |at| (response - (now - at)).clamp(0., response));
@@ -523,17 +528,13 @@ impl Maneuver {
                 if self._start_motor != NEUTRAL
                     && (self.crosswalk_state == Some("approach") || !self._crosswalk_search_passed)
                 {
-                    // round y10: 1560 to start, then 1550 until the crosswalk stop
+                    // Low-speed top-up after the initial start-zone launch.
                     self._start_motor =
                         if vc < CROSSWALK_CRUISE_MPS - CROSSWALK_CRUISE_BAND_MPS { TRIAL_MOTOR } else { ROUTE_SLOW_MOTOR };
-                    // 11-04: with the stripes planned at rest the distance is known; 1550 took 2.3 s to
-                    // reach .95 m/s (y51). y52's 1600 frame put its .45 s launch rise (1.1 m/s) into
-                    // vc, so the aim cut at once and the run went 1500/1550 by turns (4.19 s). Race:
-                    // 1570 (rise on the 1 m/s2 push) up to the cruise speed, then 1550.
                     if self.race_inputs.is_some() && self.race_crosswalk_stop.planned.is_some()
-                        && self.crosswalk_state == Some("approach") && vc < CROSSWALK_RACE_CRUISE_MPS
+                        && self.crosswalk_state == Some("approach")
                     {
-                        self._start_motor = FIRST_APPROACH_MOTOR;
+                        self._start_motor = START_LAUNCH_MOTOR;
                     }
                 }
             }
@@ -558,7 +559,9 @@ impl Maneuver {
             crosswalk.set("speed_basis", "recent_radar_anchor_with_short_imu_change");
         }
         if self.crosswalk_state == Some("done") && let Some(input) = self.race_inputs {
-            let recent_body = self.race_surface_speed.speed(now, input.forward_integral);
+            let at_tangent = approach.get("before_tangent_point_m").of().filter(|v| *v>0.)
+                .and_then(|_|self.tangent_body_speed(scan));
+            let recent_body = at_tangent.or_else(||self.race_surface_speed.speed(now, input.forward_integral));
             let body_speed = recent_body
                 .or_else(|| self.race_crosswalk.imu_speed(input.forward_integral)).or(speed);
             let hold_accel = self.race_surface.predicted_drive_accel(crate::race_crosswalk::APPROACH_CRUISE_MOTOR, body_speed, now)
@@ -572,6 +575,7 @@ impl Maneuver {
                 let before = planned.or_else(|| ahead.map(|d| (d - FRONT_BODY_EXTENT_M - FIRST_APPROACH_BOARD_GAP_M - LANE_START_SEARCH_M).max(0.)));
                 let rolling_tangent = planned.is_some() && self._launch_cmd_at.is_none_or(|at| now - at >= CROSSWALK_AIM_LAG_S);
                 (self._start_motor, first_drive) = exit.first_approach_drive(speed, recent_body, before, rolling_tangent, decel, now, input.forward_integral, hold_accel, self.wall_turn.first_entry_mps());
+                if at_tangent.is_some(){first_drive.set("speed_source","current_cone_motion_and_measured_boards");}
                 first_drive.set("hold_accel_mps2", hold_accel);
                 first_drive.set("distance_source", if planned.is_some() { "first_tangent" } else { "board_search_room" });
                 allowed = None;
@@ -653,6 +657,9 @@ impl Maneuver {
         let floats = Self::ranges_floats(scan);
         let bins = bins_of(target.idx("support_bins"));
         let (center, radius0) = support_center(&floats, &bins, target.get("diameter_m"));
+        if side > 0 && let Some(input)=self.race_inputs {
+            self.race_crosswalk.cone_motion.observe(scan,self.last_now,identity,center,input);
+        }
         if map_aim.is_some() {
             self.field_map.observe_cone(scan, cone, center);
         }
@@ -1192,16 +1199,18 @@ impl Maneuver {
             } else {
                 // Keep the same one-way approach state across target handover.
                 // A noisy tangent moving farther away cannot re-enable 1570.
-                let recent_body = self.race_surface_speed.speed(now, input.forward_integral);
+                let at_tangent=lp.get("before_tangent_point_m").of().filter(|v| *v>0.).and_then(|_|self.tangent_body_speed(scan));
+                let recent_body = at_tangent.or_else(||self.race_surface_speed.speed(now, input.forward_integral));
                 let speed = recent_body
                     .or_else(|| self.race_crosswalk.imu_speed(input.forward_integral));
                 let acceleration = self.race_surface.predicted_drive_accel(crate::race_crosswalk::APPROACH_CRUISE_MOTOR, speed, now)
                     .unwrap_or(LANE_POWER_ACCEL_MPS2)
                     .max(self.race_surface.predicted_hold_accel(crate::race_crosswalk::APPROACH_CRUISE_MOTOR, speed, now).unwrap_or(0.));
-                let (_, feedback) = self.race_crosswalk.first_approach_drive(speed, recent_body,
+                let (_, mut feedback) = self.race_crosswalk.first_approach_drive(speed, recent_body,
                     lp.get("before_tangent_point_m").of(), true,
                     self._lane_coast_decel.unwrap_or(LANE_STOP_DECEL_MPS2), now,
                     input.forward_integral, acceleration, self.wall_turn.first_entry_mps());
+                if at_tangent.is_some(){feedback.set("speed_source","current_cone_motion_and_measured_boards");}
                 self.start_lane_feedback.set("first_approach_drive", feedback);
             }
         }
@@ -1219,6 +1228,11 @@ impl Maneuver {
         }
         let t = lp.idx("target_pwm").i();
         let t = self.wall_turn_command(scan, now, 1, &target).map_or(t, |wall| t.max(wall));
+        // tangent_to_circle also returns zero remaining distance on the actual arc.
+        if self.race_inputs.is_some() && lp.get("before_tangent_point_m").of()==Some(0.) {
+            let arc = self.first_arc_feedback(scan,&lp,control,t);
+            self.open_loop.set("arc_drive",arc);
+        }
         self.natural_steering_target = Some(t);
         self.steering_target = NEUTRAL.max(t);
         self.reason = "open_first_loop".into();
@@ -1585,7 +1599,8 @@ impl Maneuver {
     fn transfer_drive(&mut self, scan: &V, now: f64, remaining: Option<f64>, target_pwm: i64) {
         let decel = self.lane_decels().0;
         let Some(input) = self.race_inputs else { return };
-        let speed = self.race_surface_speed.speed(now, input.forward_integral);
+        let speed = self.field_map.body_speed(scan)
+            .or_else(|| self.race_surface_speed.speed(now, input.forward_integral));
         // Once cone two is observed, its local motion replaces the old boost
         // anchor for the approach. y86's boost anchor said 1.81 m/s while
         // reconstruction from the same cone and IMU gave about 2.16 m/s.
@@ -1612,14 +1627,16 @@ impl Maneuver {
             return self.result(now);
         };
         self.open_second_observation(scan, now, heading);
-        let mapped = self.use_field_guidance()
-            && self.field_map.planning_center(scan, 1).is_some_and(|(x, y)| {
+        let mapped_second = self.use_field_guidance()
+            .then(|| self.field_map.planning_center(scan, 1))
+            .flatten()
+            .filter(|&(x, y)| {
                 let (axis, _) = axis_frame(PI, heading, 1.);
                 x > FRONT_BODY_EXTENT_M
                     && (x * axis.0 + y * axis.1) > FRONT_BODY_EXTENT_M
                     && (x * axis.1 - y * axis.0).abs() <= OPEN_SECOND_BAND_HALF_M
-                    && x.hypot(y) <= OPEN_HANDOVER_MAX_RANGE_M
             });
+        let mapped = mapped_second.is_some_and(|(x, y)| x.hypot(y) <= OPEN_HANDOVER_MAX_RANGE_M);
         if self.open_confirmed_second(scan).is_some() || mapped {
             self.open_begin_second_loop(scan, now, control);
             self._second_plan_pending = Some((scan.idx("seq").clone(), scan.idx("at_ms").clone()));
@@ -1630,15 +1647,23 @@ impl Maneuver {
         let (channel, natural) = self.open_transfer_steering(scan, heading, pose);
         let (ahead, speed, stop_at) = self.open_front_stop(scan);
         let maturing = self.open_second_maturing(scan, ahead, stop_at);
-        if self.race_inputs.is_some() && maturing {
+        let yaw_ok = self.race_inputs.and_then(|i| i.yaw_rate).unwrap_or(self.compass.rate).abs() <= 1.2;
+        let channel_open = self.use_field_guidance()
+            && heading >= 3.05 && yaw_ok
+            && channel.get("divider_open_end_along_m").of().is_some_and(|d| d >= 1.5);
+        if self.race_inputs.is_some() && (maturing || mapped_second.is_some() || channel_open) {
             self.race_transfer.support_handed_over();
         }
         if self.race_inputs.is_some() {
             let proof = &self.role_distinct_evidence;
+            let mapped_remaining = mapped_second.map(|(x, y)| {
+                let (axis, _) = axis_frame(PI, heading, 1.);
+                ((x * axis.0 + y * axis.1) - 0.75).max(0.2)
+            });
             let remaining = if py_eq(proof.get("source_seq"), scan.get("seq")) {
                 proof.get("second_along_axis_m").of()
             } else {
-                channel.get("divider_open_end_along_m").of()
+                mapped_remaining.or_else(|| channel.get("divider_open_end_along_m").of())
             };
             self.transfer_drive(scan, now, remaining, natural);
         } else {
@@ -1652,7 +1677,7 @@ impl Maneuver {
         self.open_feedback.set("front_stop_range_m", stop_at);
         self.open_feedback.set("second_acquisition_reason", self.second_acquisition_reason.clone());
         self.open_feedback.set("second_confirm_grace", maturing);
-        let board_without_support = ahead.is_some_and(|a| a <= stop_at) && !maturing;
+        let board_without_support = ahead.is_some_and(|a| a <= stop_at) && !maturing && mapped_second.is_none() && !channel_open;
         if self.race_inputs.is_some() && (board_without_support || self.race_transfer.waiting_for_support()) {
             return self.open_transfer_coast_for_support(now, natural);
         }
@@ -1748,6 +1773,12 @@ impl Maneuver {
         // The circle itself reports zero; a mode label must not erase distance.
         let remaining = lp.idx("before_tangent_point_m").of();
         self.transfer_drive(scan, now, remaining, lp.idx("target_pwm").i());
+        if self.race_inputs.is_some()
+            && progress.is_some_and(|p| p >= 1.50)
+            && remaining.is_some_and(|d| d <= 0.05)
+        {
+            self._transfer_motor = 1590;
+        }
         let earliest = if self.race_inputs.is_some() { LIGHT_GATE_HANDOFF_PROGRESS_RAD } else { OPEN_LIGHT_HANDOFF_PROGRESS_RAD };
         if let Some(p) = progress
             && p >= earliest
@@ -1772,7 +1803,17 @@ impl Maneuver {
             }
         }
         let t = lp.idx("target_pwm").i();
-        let t = self.wall_turn_command(scan, now, -1, &target).map_or(t, |wall| t.min(wall));
+        let mut t = self.wall_turn_command(scan, now, -1, &target).map_or(t, |wall| t.min(wall));
+        // Real-car 2026-11-25 Runs #2/#3: prevent small right-steering relaxation (+3..+65 PWM)
+        // in second_loop from flipping the chassis ±40 PWM backlash compensator back toward straight.
+        if self.race_inputs.is_some()
+            && self.servo < NEUTRAL
+            && t > self.servo
+            && t < self.servo + 65
+            && remaining.is_none_or(|d| d <= 0.60)
+        {
+            t = self.servo;
+        }
         if self.wall_turn.stop_pushing() {
             self._transfer_motor = NEUTRAL;
         }
@@ -1798,6 +1839,9 @@ impl Maneuver {
             "semantic_class" => "unknown", "physical_cone_pass_certified" => false, "swept_path_certified" => false,
         };
         self.route_stage = "light_entry";
+        if self.race_inputs.is_some() {
+            self.lane_motor = START_LAUNCH_MOTOR;
+        }
         self.light_since = Some(now);
         self.light_turn_started = Some(now);
         self.open_reset_loop(None);
@@ -2172,11 +2216,14 @@ impl Maneuver {
             return self.result(now);
         };
         let heading = heading.unwrap();
-        let light_ahead = self.light_stop_track(scan, now, control, Some(heading), &lane);
         let entry = self.open_light_lane_entry(scan, heading, &lane);
-        if entry.is_some() {
+        if entry.is_some() && self.race_inputs.is_some() {
+            // Process the alignment revolution once in its destination state: don't
+            // consume the opening here and omit the braking/settling update there.
             return self.begin_light_lane(scan, now, control, entry);
         }
+        let light_ahead = self.light_stop_track(scan, now, control, Some(heading), &lane);
+        if entry.is_some() { return self.begin_light_lane(scan, now, control, entry); }
         if self.light_stop_state == Some("waiting") && !self.light_wait(scan, now, control) {
             // Round y2: stopped before the light still in the entry.
             self.natural_steering_target = Some(natural);
@@ -2223,7 +2270,8 @@ impl Maneuver {
             if let Some(basis) = basis {
                 self.light_stop_reached(scan, now, control, &basis);
             }
-        } else if self.released_light_entry()
+        }
+        if self.released_light_entry()
             && let Some(result) = self.update_finish_output(scan, axis_ahead, now, control, None) {
             return result;
         }

@@ -11,6 +11,104 @@ use crate::maneuver_post::pairwise_track_speed;
 use crate::py::*;
 
 impl Maneuver {
+    pub(crate) fn crosswalk_braking_stage(&self) -> bool {
+        self.race_program && self.route_stage == "start_lane" && self.race_inputs.is_some()
+            && matches!(self.crosswalk_state, Some("approach" | "fallback"))
+    }
+
+    pub(crate) fn crosswalk_brake_ack_expected(&self) -> bool {
+        self.race_inputs.is_some()
+            && ((self.route_stage == "start_lane"
+                    && (self.race_crosswalk_stop.brake.has_braked() || self.race_crosswalk.has_braked()))
+                || (self.route_stage == "first_target" && self.race_crosswalk.has_braked())
+                || (matches!(self.route_stage, "open_transfer" | "second_loop" | "light_entry")
+                    && self.race_transfer.has_braked()))
+    }
+
+    fn race_crosswalk_approach(&mut self, scan: &V, now: f64, control: &V,
+        gap: Option<f64>, radar_speed: Option<f64>, input: crate::motion_sensors::RaceInputs) -> Option<&'static str> {
+        use crate::race_light_brake::{BrakeModel, BRAKE_REST_MPS};
+        if self._power_cmd_at.is_none() { return None; }
+        let decel = self.lane_decels().0;
+        let model = BrakeModel::light(1., decel);
+        let applied = control.get("motor").oi().filter(|_| control.get("command_acked").is_true());
+        let history = if self._crosswalk_rear == Some(true) { &self._crosswalk_rear_history } else { &self._track_history };
+        let range_speed = self.race_crosswalk_stop.brake.observe_range_speed(now, radar_speed, history, decel, model);
+        let from_rest = self.race_crosswalk_stop.imu_speed(input.forward_integral);
+        let speed = self.race_surface_speed.speed(now, input.forward_integral).or(from_rest);
+        let map_axis = self.field_map.axis_speed(scan);
+        // Use projected range_speed + map axis speed; when actively braking and lidar/map agree we are at rest,
+        // do not let residual IMU drift hold 1300 past standstill.
+        let speed = if self.race_crosswalk_stop.brake.is_active()
+            && range_speed.is_some_and(|v| v <= BRAKE_REST_MPS)
+            && map_axis.is_none_or(|v| v <= 0.06)
+        {
+            range_speed
+        } else {
+            [speed, range_speed, map_axis].into_iter().flatten()
+                .filter(|v| v.is_finite()).reduce(f64::max)
+        };
+        let moving = speed.is_some_and(|v| v > BRAKE_REST_MPS);
+        let turn_fallback = self.crosswalk_state == Some("fallback");
+        let fallback = turn_fallback || gap.is_none();
+        let acceleration = applied.filter(|&pwm| pwm > NEUTRAL)
+            .and_then(|pwm| {
+                self.race_surface.predicted_drive_accel(pwm, speed, now)
+                    .or_else(|| if pwm >= START_LAUNCH_MOTOR { Some(5.05) } else if pwm >= 1600 { Some(4.14) } else { None })
+            }).unwrap_or(0.).max(0.);
+        let tail = if self.race_crosswalk_stop.brake.is_active() {
+            0.
+        } else {
+            speed.map_or(0., |v| {
+                let power_resp = 0.056;
+                let rise = acceleration * power_resp;
+                let scan_rise = range_speed.zip(from_rest).map_or(0., |(radar, inertial)|
+                    (radar - inertial).max(0.).min(acceleration * self.race_crosswalk_stop.scan_s.unwrap_or(0.)));
+                model.distance(v + scan_rise + rise) - model.distance(v) + 0.5 * rise * power_resp
+            })
+        };
+        let brake = &mut self.race_crosswalk_stop.brake;
+        brake.resume_after_forward(applied, range_speed.or(radar_speed));
+        brake.observe(now, gap, speed, input.forward_integral, 1., decel, model, CROSSWALK_TARGET_GAP_M + 0.06 + tail);
+        if (fallback || gap.is_some_and(|g| g <= CROSSWALK_TARGET_GAP_M))
+            && (moving || (speed.is_none() && control.get("motor").oi().is_some_and(|p| p > NEUTRAL))) {
+            brake.begin_stop(now);
+        }
+        // Release 1300 immediately once physical speed is confirmed at rest (<= 0.03 m/s)
+        // so the mandatory 3 s crosswalk standstill clock begins without ~0.18 s dead hold.
+        if brake.is_active() && speed.is_some_and(|v| v <= 0.03)
+            && range_speed.is_none_or(|v| v <= 0.05)
+        {
+            brake.release_at_rest(now);
+        }
+        let motor = brake.command(now, input.forward_integral);
+        let rolled_out = self._power_cmd_at.is_none_or(|at| now - at >= CROSSWALK_STOP_MAX_S);
+        let settled = range_speed.or(radar_speed).is_some_and(|v| v < LANE_SPEED_RESTART_MPS)
+            || speed.is_some_and(|v| v <= BRAKE_REST_MPS)
+            || rolled_out;
+        let fallback_rest = !moving && settled || (rolled_out && radar_speed.is_none());
+        if (brake.is_used() && settled) || (fallback && fallback_rest) {
+            if fallback || gap.is_some_and(|g| g <= CROSSWALK_ZONE_M) {
+                self._start_motor = NEUTRAL;
+                let basis = if turn_fallback { "stopped_in_the_first_turn_fallback" }
+                    else if gap.is_none() { "stopped_with_the_crosswalk_odometry_lost" }
+                    else if gap.is_some_and(|g| g < 0.) { "stopped_past_the_crosswalk_edge" }
+                    else { "stopped_before_the_crosswalk" };
+                return Some(self.crosswalk_stopped(scan, now, control, gap, basis));
+            }
+            // A stop short of the stripe uses the existing forward pull-up.
+            // The next brake requires acknowledged forward motion.
+            self._start_motor = TRIAL_MOTOR;
+        } else if let Some(motor) = motor {
+            self._start_motor = motor;
+        } else if brake.is_used() || fallback {
+            self._start_motor = NEUTRAL;
+        } else if moving && self._start_motor == NEUTRAL {
+            self._start_motor = ROLLING_HOLD_MOTOR;
+        }
+        None
+    }
+
     /// _lane_rear_range(scan): round y9, the nearest return straight behind
     /// along the compass axis (+-LANE_FRONT_HALF_BINS), or None.
     pub fn lane_rear_range(&self, scan: &V) -> Option<f64> {
@@ -287,7 +385,9 @@ impl Maneuver {
             }
             _ => 0.,
         };
-        if state == "approach" {
+        if self.race_program && matches!(state, "approach" | "fallback") && let Some(input) = self.race_inputs {
+            state = self.race_crosswalk_approach(scan, now, control, gap, speed, input).unwrap_or(state);
+        } else if state == "approach" {
             if let (Some(v), Some(g)) = (v, gap) {
                 aim = Some(g - v * CROSSWALK_AIM_LAG_S - v * v / (2. * decel));
                 worst = Some(g - v * CROSSWALK_GUARD_REACTION_S - v * v / (2. * guard_decel)); // round y20: no speed margin
@@ -401,6 +501,7 @@ impl Maneuver {
             "motor" => self._start_motor,
         };
         if let Some(input) = self.race_inputs {
+            out.set("brake_phase", self.race_crosswalk_stop.brake.phase());
             out.set("planned_at_rest", self.race_crosswalk_stop.planned.is_some());
             out.set("imu_speed_mps", self.race_crosswalk_stop.imu_speed(input.forward_integral));
             out.set("next_scan_m", next_scan_m);

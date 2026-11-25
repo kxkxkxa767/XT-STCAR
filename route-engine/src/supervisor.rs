@@ -901,6 +901,7 @@ impl Supervisor {
             DRIVE_MOTORS.to_vec()
         };
         if m.pause_brake_ack_expected() { pending_motors.push(LANE_BRAKE_MOTOR); }
+        if m.trim_ack_expected(){pending_motors.push(crate::race_light::trim::TRIM_PWM);}
         let pending_neutral = in_motors(control.get("motor"), &pending_motors)
             && neutral_seq.is_none_or(|n| seq_of(&control) < n as f64);
         if !neutral_ack && !pending_neutral {
@@ -1596,7 +1597,7 @@ impl Supervisor {
                 || (stage_is("light_entry")
                     && (decision.get("light_stop_active").is_true() || m.released_light_entry() || route_center.get("transfer_coast").is_true())
                     && py_eq(route_center.get("motor"), &V::Int(NEUTRAL)))
-                || (m.light_brake_ack_expected() && py_eq(route_center.get("motor"), &V::Int(LANE_BRAKE_MOTOR))))
+                || ((m.light_brake_ack_expected() || m.crosswalk_brake_ack_expected()) && py_eq(route_center.get("motor"), &V::Int(LANE_BRAKE_MOTOR))))
             && route_center.get("seq").is_int()
             && self.arm_sequence as f64 <= route_center.get("seq").f()
             && route_center.get("seq").f() <= seq_of(&control)
@@ -1646,12 +1647,11 @@ impl Supervisor {
         if launch_allowed {
             motors.push(START_LAUNCH_MOTOR);
             motors.push(STRAIGHT_MOTOR); // round y23: the start lane's straight
-            if m.race_inputs.is_some() && m.crosswalk_state == Some("done") {
-                motors.push(START_LAUNCH_MOTOR + crate::race_crosswalk::APPROACH_PWM_ADD);
-            }
         }
-        if m.first_approach_hold() == Some(START_LAUNCH_MOTOR + crate::race_crosswalk::APPROACH_PWM_ADD) {
-            motors.push(START_LAUNCH_MOTOR + crate::race_crosswalk::APPROACH_PWM_ADD);
+        if (launch_allowed && m.race_crosswalk.crosswalk_released()
+                && m.race_crosswalk.first_motor() == Some(CROSSWALK_LAUNCH_MOTOR))
+            || m.first_approach_hold() == Some(CROSSWALK_LAUNCH_MOTOR) {
+            motors.push(CROSSWALK_LAUNCH_MOTOR);
         }
         // User 11-04: race speed holds (start lane, cone one's approach, the transfer) use the
         // open PWM steps 1555-1590.
@@ -1662,12 +1662,23 @@ impl Supervisor {
                 && decision.get("quality_resume_pending").is_false()))
         {
             motors.extend_from_slice(&HOLD_MOTORS);
+            if transfer_drive || (m.race_crosswalk.crosswalk_released() && m.race_crosswalk.first_motor()==Some(ROLLING_HOLD_MOTOR)) {
+                motors.push(ROLLING_HOLD_MOTOR);
+            }
             motors.push(STRAIGHT_MOTOR);
+            motors.push(1600);
+            motors.push(START_LAUNCH_MOTOR);
         }
         if m.race_inputs.is_some() && phase == "drive"
             && (stage_is("light_entry") || stage_is("light_lane")) {
             motors.push(ROLLING_HOLD_MOTOR);
             motors.push(RACE_CRUISE_MOTOR);
+            if decision.get("quality_resume_pending").is_false() {
+                motors.extend_from_slice(&HOLD_MOTORS);
+                motors.push(STRAIGHT_MOTOR);
+                motors.push(1600);
+                motors.push(START_LAUNCH_MOTOR);
+            }
         }
         // Round y23: the transfer's straight push.
         if phase == "drive" && (stage_is("open_transfer") || m.transfer_stage()) && decision.get("quality_resume_pending").is_false() {
@@ -1690,7 +1701,21 @@ impl Supervisor {
             && m.race_inputs.is_some() && matches!(stage, "light_entry" | "light_lane")
             && m.light_approaching() && m.race_light_brake.is_active()
             && decision.get("quality_resume_pending").is_false();
-        if brake_allowed || visibility_brake_allowed {
+        if phase=="drive" && m.race_program && m.light_motor_stage() && (m.light_stop_state==Some("waiting")
+            || (m.light_approaching() && m.race_light.trim.before_stop))
+            && !m.quality_resume_pending && m.race_light.trim.authorized(t) {
+            motors.push(crate::race_light::trim::TRIM_PWM);
+        }
+        let crosswalk_approach = phase == "drive" && stage_is("start_lane")
+            && decision.get("quality_resume_pending").is_false() && m.crosswalk_braking_stage();
+        if crosswalk_approach { motors.push(ROLLING_HOLD_MOTOR); }
+        let pre_cone_brake_allowed = phase == "drive"
+            && m.race_inputs.is_some()
+            && decision.get("quality_resume_pending").is_false()
+            && ((stage_is("start_lane") && m.crosswalk_state == Some("done") && m.race_crosswalk.is_braking())
+                || (stage_is("first_target") && m.first_approach_hold() == Some(LANE_BRAKE_MOTOR))
+                || ((stage_is("open_transfer") || m.transfer_stage()) && m.race_transfer.is_braking()));
+        if brake_allowed || visibility_brake_allowed || (crosswalk_approach && m.race_crosswalk_stop.brake.is_active()) || pre_cone_brake_allowed {
             motors.push(LANE_BRAKE_MOTOR);
         }
         if !in_motors(&motor, &motors) || !(minimum_servo as f64 <= num(&servo) && num(&servo) <= SERVO_MAX as f64) {
@@ -2374,7 +2399,10 @@ mod race_start_tests {
             let session = s.session.as_ref().expect("offline session remained active");
             assert!(session.report.get("quality_issues").l().is_empty());
             assert!(!session.report.get("perception_recovering").truthy());
-            if s.emits.iter().any(|e| e.op == "drive" && e.motor.f() > 1500.) { return; }
+            if let Some(first) = s.emits.iter().find(|e| e.op == "drive" && e.motor.f() > 1500.) {
+                assert_eq!(first.motor.oi(), Some(START_LAUNCH_MOTOR));
+                return;
+            }
         }
         panic!("no drive command in the offline start handshake");
     }
