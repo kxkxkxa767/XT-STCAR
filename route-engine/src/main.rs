@@ -53,6 +53,9 @@ mod motion_sensors;
 mod race_crosswalk;
 mod race_crosswalk_stop;
 mod race_crosswalk_vision;
+mod race_cam_features;
+mod race_cam_loc;
+mod race_cam_eval;
 mod race_traffic_light;
 mod traffic_lamp;
 mod race_surface;
@@ -511,6 +514,9 @@ fn main() {
     }
     if args.get(1).map(String::as_str) == Some("tdrag") {
         std::process::exit(t_drag::main(&args[2..]));
+    }
+    if args.get(1).map(String::as_str) == Some("cam-loc-eval") {
+        std::process::exit(race_cam_eval::main(&args[2..]));
     }
     if args.get(1).map(String::as_str) == Some("race") {
         std::process::exit(race::main(&args[2..]));

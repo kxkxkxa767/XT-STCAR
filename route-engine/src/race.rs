@@ -170,6 +170,7 @@ pub(crate) enum Event {
     Line(&'static str, String, Instant),
     RustCrosswalk(crate::race_crosswalk_vision::RustCrosswalkObs, Instant),
     RustLamp(crate::race_traffic_light::Observation, Instant),
+    RustCamLoc(Box<crate::race_cam_features::VisualFrame>, Instant),
     Coast(u64, String),
     Ended(&'static str, String),
     Enter,
@@ -405,7 +406,8 @@ struct Program {
     light: V,
     light_updates: i64,
     vision_phase: Option<&'static str>,
-    lamp_worker: Option<Sender<bool>>,
+    lamp_worker: Option<Sender<crate::race_traffic_light::WorkerMode>>,
+    worker_mode: crate::race_traffic_light::WorkerMode,
     rust_cw_hint: std::sync::Arc<std::sync::Mutex<crate::race_crosswalk_vision::LaneLidarHint>>,
     rust_cw_stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
     rust_cw_stats: std::sync::Arc<std::sync::Mutex<crate::race_crosswalk_vision::RustCrosswalkStats>>,
@@ -491,12 +493,20 @@ impl Program {
         if self.o.frame_shm.is_none() {
             return;
         }
-        if self.vision_phase != Some(phase) {
-            let active = crate::race_traffic_light::lamp_phase(Some(phase));
-            if active != crate::race_traffic_light::lamp_phase(self.vision_phase)
-                && let Some(worker) = &self.lamp_worker {
-                let _ = worker.send(active);
+        let desired_mode = if crate::race_traffic_light::lamp_phase(Some(phase)) {
+            crate::race_traffic_light::WorkerMode::LampAndLoc
+        } else if self.sup.session.is_some() || phase == "drive" {
+            crate::race_traffic_light::WorkerMode::LocOnly
+        } else {
+            crate::race_traffic_light::WorkerMode::Idle
+        };
+        if desired_mode != self.worker_mode {
+            if let Some(worker) = &self.lamp_worker {
+                let _ = worker.send(desired_mode);
             }
+            self.worker_mode = desired_mode;
+        }
+        if self.vision_phase != Some(phase) {
             self.vision_phase = Some(phase);
             let _ = self.files.send(FileOp::Put("vision-phase.txt", format!("{phase}\n")));
         }
@@ -594,6 +604,15 @@ impl Program {
                         "red" => i64::from(obs.lights.red), "green" => i64::from(obs.lights.green),"housing_lip_y"=>obs.housing_lip};
                     self.apply_light(light);
                 }
+            }
+            Event::RustCamLoc(obs, received) => {
+                let now = self.at(received);
+                let captured_program_s = self
+                    .base_monotonic_s
+                    .map(|bm| obs.captured_mono_s - bm)
+                    .filter(|t| t.is_finite() && (-10.0..=now + 1.0).contains(t))
+                    .unwrap_or_else(|| (now - obs.compute_us as f64 * 1e-6).max(0.0));
+                self.sup.observe_rust_cam_loc(*obs, captured_program_s);
             }
             Event::RustCrosswalk(obs, received) => {
                 let now = self.at(received);
@@ -837,6 +856,7 @@ pub fn main(args: &[String]) -> i32 {
         light_updates: 0,
         vision_phase: None,
         lamp_worker,
+        worker_mode: crate::race_traffic_light::WorkerMode::Idle,
         rust_cw_hint,
         rust_cw_stop: rust_cw_stop.clone(),
         rust_cw_stats,

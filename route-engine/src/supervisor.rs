@@ -1238,7 +1238,8 @@ impl Supervisor {
         // Only missing-beam issues can be tolerated by the map, during driving.
         let map_coverage = s.motion.field_course_active()
             && s.motion.field_map.heading(&clearance_scan).is_some()
-            && clearance.get("valid_returns").oi().is_some_and(|n| n > 0);
+            && (clearance.get("valid_returns").oi().is_some_and(|n| n > 0)
+                || s.motion.field_map.camera_localized(&clearance_scan));
         if clearance.idx("body_proximity").idx("target_contact_tolerated").truthy() {
             incr_or_zero(&mut s.report, "target_contact_tolerated_count");
         }
@@ -2113,6 +2114,13 @@ impl Supervisor {
     pub fn observe_rust_crosswalk(&mut self, obs: &crate::race_crosswalk_vision::RustCrosswalkObs, captured_program_s: f64) {
         if let Some(session) = self.session.as_mut() {
             session.motion.rust_crosswalk_observe(obs, captured_program_s);
+        }
+    }
+
+    /// Low-CPU Rust visual localization features forwarded to the active race session's field map.
+    pub fn observe_rust_cam_loc(&mut self, obs: crate::race_cam_features::VisualFrame, captured_program_s: f64) {
+        if let Some(session) = self.session.as_mut() {
+            session.motion.field_map.observe_camera(obs, captured_program_s);
         }
     }
 

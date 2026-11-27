@@ -13,19 +13,19 @@ type XY = (f64, f64);
 const BRIDGE_S: f64 = 0.65; // lifetime of a coordinate supported only by inertial motion
 const MATCH_M: f64 = 0.25;
 
-struct Board {
-    vertical: bool,
-    fixed: f64,
-    lo: f64,
-    hi: f64,
+pub(crate) struct Board {
+    pub(crate) vertical: bool,
+    pub(crate) fixed: f64,
+    pub(crate) lo: f64,
+    pub(crate) hi: f64,
 }
-struct Field {
-    walls: [Board; 6],
-    start: [f64; 2],
-    cones: [Point2; 2],
-    beam_spacing: f64,
+pub(crate) struct Field {
+    pub(crate) walls: [Board; 6],
+    pub(crate) start: [f64; 2],
+    pub(crate) cones: [Point2; 2],
+    pub(crate) beam_spacing: f64,
 }
-static FIELD: LazyLock<Option<Field>> = LazyLock::new(|| {
+pub(crate) static FIELD: LazyLock<Option<Field>> = LazyLock::new(|| {
     let m: BTreeMap<String, [f64; 2]> = serde_json::from_str(include_str!("../../config/race-field-map.json")).ok()?;
     let [length, width] = *m.get("field_size_m")?;
     let [a, lower] = *m.get("start_divider_tip_m")?;
@@ -76,7 +76,7 @@ pub(super) fn path_anchors() -> Option<[XY; 5]> {
 
 impl Field {
     // The first intersected finite board wins, including the two dividers.
-    fn hit(&self, x: f64, y: f64, dx: f64, dy: f64) -> Option<(usize, f64)> {
+    pub(crate) fn hit(&self, x: f64, y: f64, dx: f64, dy: f64) -> Option<(usize, f64)> {
         let mut nearest = f64::INFINITY;
         let mut face = None;
         for (i, board) in self.walls.iter().enumerate() {
@@ -107,12 +107,12 @@ struct FaceFit {
 }
 
 #[derive(Clone, Copy)]
-struct Ray {
-    range: f64,
-    dx: f64,
-    dy: f64,
-    ox: f64,
-    oy: f64,
+pub(crate) struct Ray {
+    pub(crate) range: f64,
+    pub(crate) dx: f64,
+    pub(crate) dy: f64,
+    pub(crate) ox: f64,
+    pub(crate) oy: f64,
 }
 
 /// A short fragment of a known straight board still observes rotation. Fit
@@ -315,9 +315,44 @@ pub struct Locator {
     cone_fix: bool,
     fragment_fix: bool,
     valid_rays: usize,
+    pub(crate) cam_loc: crate::race_cam_loc::CamLocState,
 }
 
 impl Locator {
+    pub fn observe_camera(&mut self, obs: crate::race_cam_features::VisualFrame, captured_at: f64) {
+        self.cam_loc.observe_camera(obs, captured_at);
+    }
+
+    pub fn camera_localized(&self, scan: &V) -> bool {
+        self.current(scan).is_some() && self.cam_loc.last_cam_anchored.iter().any(|&b| b)
+    }
+
+    pub fn raw_pose_xy_yaw(&self) -> Option<(f64, f64, f64)> {
+        self.pose.map(|p| (p.x_m, p.y_m, p.yaw_rad))
+    }
+
+    pub fn force_state_for_eval(
+        &mut self,
+        seq: i64,
+        at: f64,
+        pose: Pose2,
+        speed: f64,
+        yaw_rate: Option<f64>,
+        integral: Option<f64>,
+    ) {
+        self.seq = Some(seq);
+        self.at = Some(at);
+        self.pose = Some(pose);
+        self.speed = speed;
+        self.yaw_rate = yaw_rate;
+        self.integral = integral;
+        self.last_axis = [Some(at), Some(at)];
+        self.support = [16, 16];
+        self.scan_yaw_integral = None;
+        self.cam_loc.last_cam_fix_at = Some(at);
+        self.fixes.clear();
+        self.fixes.push_back(Fix { seq, at, pose });
+    }
     pub fn prior(&self, scan: &V, old: &V, cone: usize) -> crate::compact_target::TrackingPrior {
         crate::compact_target::TrackingPrior {
             carried: self.carry(scan, old, cone),
@@ -340,7 +375,9 @@ impl Locator {
         };
         compass.heading = Some(h);
         compass.at_s = Some(at);
-        if self.support.iter().any(|&n| n >= 4) {
+        let measured = self.support.iter().any(|&n| n >= 4)
+            || self.cam_loc.last_cam_anchored.iter().all(|&b| b);
+        if measured {
             compass.measured_at_s = Some(at);
             compass.last_measurement = Some((h, at));
         }
@@ -348,7 +385,7 @@ impl Locator {
             compass.rate = w;
         }
         compass.evidence = crate::dict! {"basis"=>"surveyed_boards_and_imu","heading_rad"=>h,"source_at_ms"=>scan.get("at_ms").clone(),
-        "rate_rad_s"=>compass.rate, "measured"=>self.support.iter().any(|&n| n>=4)};
+        "rate_rad_s"=>compass.rate, "measured"=>measured};
     }
 
     pub fn observe(&mut self, scan: &V, now: f64, imu: RaceInputs, at_start: bool) {
@@ -362,9 +399,10 @@ impl Locator {
         {
             return;
         }
-        let Some((ranges, true)) = ranges_info(scan.get("ranges")) else {
+        let Some((raw_ranges, true)) = ranges_info(scan.get("ranges")) else {
             return;
         };
+        let ranges = crate::race_cam_loc::filter_lidar_speckles(&raw_ranges);
         let interval = self.at.map_or(0., |old| at - old);
         let dt = if interval <= BRIDGE_S { interval } else { 0. };
         let w = imu.yaw_rate.filter(|v| v.is_finite());
@@ -452,9 +490,44 @@ impl Locator {
                 self.fragment_fix = true;
             }
         }
+        let prev_cam_fix_at = self.cam_loc.last_cam_fix_at;
         self.valid_rays = beams.len();
-        let (mut pose, support, error) = register(field, prior, &beams, w.is_some());
-        let mut anchored = support.map(|n| n >= 4);
+        let (mut pose, mut support, mut error) = register(field, prior, &beams, w.is_some());
+        let lidar_locked = support[0] >= 4 && support[1] >= 4;
+        let mut cam_anchored = [false; 2];
+        if lidar_locked {
+            if support[0] >= 8 && support[1] >= 8 && beams.len() >= 40 && error < 0.08 {
+                self.cam_loc
+                    .calibrate_from_lidar(field, pose, at, speed, w.unwrap_or(0.));
+            } else {
+                self.cam_loc.last_used_cam = false;
+                self.cam_loc.last_cam_anchored = [false; 2];
+            }
+        } else if self.cam_loc.has_new_obs(at) {
+            let (cp, cs, ca, ce) =
+                self.cam_loc
+                    .joint_register(field, prior, &beams, w.is_some(), at, speed, w.unwrap_or(0.));
+            if self.cam_loc.last_used_cam {
+                pose = cp;
+                support = cs;
+                cam_anchored = ca;
+                error = ce;
+            }
+        } else {
+            self.cam_loc.last_used_cam = false;
+            // Retain recent camera-anchor badge while bridging between consecutive captures (< BRIDGE_S).
+            if self
+                .cam_loc
+                .last_cam_fix_at
+                .is_none_or(|t| at - t > BRIDGE_S)
+            {
+                self.cam_loc.last_cam_anchored = [false; 2];
+            }
+        }
+        let mut anchored = [
+            support[0] >= 4 || cam_anchored[0],
+            support[1] >= 4 || cam_anchored[1],
+        ];
         self.cone_fix = false;
         if !anchored.iter().all(|v| *v)
             && w.is_some()
@@ -475,6 +548,9 @@ impl Locator {
             let mut hits = 0;
             for c in &candidates {
                 let bins: Vec<_> = c.get("support_bins").l().iter().map(|v| v.i() as usize).collect();
+                if bins.is_empty() || bins.iter().any(|&i| i >= ranges.len() || ranges[i].is_none()) {
+                    continue;
+                }
                 let (center, _) = crate::helpers::support_center(&ranges, &bins, c.get("diameter_m"));
                 let actual = pose.body_to_world(Point2 {
                     x_m: center.0,
@@ -501,19 +577,42 @@ impl Locator {
             }
         }
         if self.pose.is_none()
-            && (beams.is_empty()
+            && ((beams.is_empty() && !cam_anchored.iter().any(|&b| b))
                 || pose.x_m < 0.
-                || pose.x_m > field.start[0] + 0.18
+                || pose.x_m > field.start[0] + 0.35
                 || pose.y_m < 0.
-                || pose.y_m > field.start[1] + 0.18)
+                || pose.y_m > field.start[1] + 0.25)
         {
             return;
         }
+        // Keep degraded/unanchored pose inside physical walled field boundaries and prevent
+        // unanchored accelerometer bias from running away during temporary camera/LiDAR gaps.
+        if !lidar_locked {
+            pose.x_m = pose.x_m.clamp(0.02, field.walls[1].fixed - 0.02);
+            pose.y_m = pose.y_m.clamp(0.02, field.walls[3].fixed - 0.02);
+        }
         self.speed = if dt > 0. && ((anchored[0] || c.abs() < 0.25) && (anchored[1] || s.abs() < 0.25)) {
-            let along = ((pose.x_m - old.x_m) * c + (pose.y_m - old.y_m) * s) / dt;
-            0.45 * speed + 0.55 * along
+            if lidar_locked {
+                let along = ((pose.x_m - old.x_m) * c + (pose.y_m - old.y_m) * s) / dt;
+                0.45 * speed + 0.55 * along
+            } else if self.cam_loc.last_used_cam {
+                // Correct velocity bias using innovation (pose - prior) over the real inter-frame interval
+                // rather than dividing a 0.3 s accumulated correction by a single 0.1 s scan step.
+                let dt_fix = prev_cam_fix_at
+                    .map_or(dt.max(0.20), |t| (at - t).clamp(dt.max(0.10), 0.60));
+                let delta_along = (pose.x_m - prior.x_m) * c + (pose.y_m - prior.y_m) * s;
+                let corr = (delta_along / dt_fix).clamp(-0.6, 0.6);
+                let lo = if speed > 0.05 { 0.0 } else { -0.4 };
+                (speed + 0.45 * corr).clamp(lo, 2.5)
+            } else {
+                let along = ((pose.x_m - old.x_m) * c + (pose.y_m - old.y_m) * s) / dt;
+                let lo = if speed > 0.05 { 0.0 } else { -0.4 };
+                (0.75 * speed + 0.25 * along.clamp(lo, 2.5)).clamp(lo, 2.5)
+            }
         } else if interval > BRIDGE_S {
             0.
+        } else if !lidar_locked {
+            (speed * 0.985).clamp(-0.4, 2.5)
         } else {
             speed
         };
@@ -526,8 +625,12 @@ impl Locator {
             .imu
             .yaw_available
             .then_some((self.imu.yaw_integral, self.imu.integrated_time));
-        if dt > 0. && (support[0] >= 6 || support[1] >= 6 || self.fragment_fix) && error < 0.12 {
-            let forward = (support[0] >= 4 || c.abs() < 0.25) && (support[1] >= 4 || s.abs() < 0.25);
+        let cam_anchor_ok = cam_anchored.iter().all(|&b| b) && self.cam_loc.last_pixel_rms < 8.0;
+        if dt > 0.
+            && (support[0] >= 6 || support[1] >= 6 || self.fragment_fix || cam_anchor_ok)
+            && error < 0.12
+        {
+            let forward = (anchored[0] || c.abs() < 0.25) && (anchored[1] || s.abs() < 0.25);
             self.imu.anchor(
                 at,
                 crate::py::wrap(pose.yaw_rad - old.yaw_rad) / dt,
@@ -658,7 +761,8 @@ impl Locator {
     }
 
     pub fn two_measured_axes(&self, scan: &V) -> bool {
-        self.current(scan).is_some() && self.support.iter().all(|&n| n >= 4)
+        self.current(scan).is_some()
+            && (0..2).all(|a| self.support[a] >= 4 || self.cam_loc.last_cam_anchored[a])
     }
 
     /// For longitudinal decisions a carried map coordinate isn't a fresh wall fix.
@@ -791,6 +895,14 @@ impl Locator {
         "wall_points_xy"=>vec![self.support[0] as i64,self.support[1] as i64],
         "mean_wall_residual_m"=>self.mean_error,"speed_mps"=>self.speed,"measured_cone_fix"=>self.cone_fix,
         "preview_pwm"=>V::list(vec![V::from(preview(0)),V::from(preview(1))]),
+        "cam_used"=>self.cam_loc.last_used_cam,
+        "cam_anchored_xy"=>V::list(vec![V::from(self.cam_loc.last_cam_anchored[0]),V::from(self.cam_loc.last_cam_anchored[1])]),
+        "cam_inliers"=>self.cam_loc.last_inliers as i64,
+        "cam_rms_px"=>self.cam_loc.last_pixel_rms,
+        "cam_solve_us"=>self.cam_loc.last_solve_us as i64,
+        "cam_pitch_deg"=>self.cam_loc.pitch_rad.to_degrees(),
+        "cam_yaw_deg"=>self.cam_loc.cam_yaw_rad.to_degrees(),
+        "cam_rail_h_m"=>self.cam_loc.rail_height_m,
         "axis_age_s"=>V::list(self.last_axis.iter().map(|t|V::from(self.at.zip(*t).map(|(a,b)|a-b))).collect())}
     }
 }

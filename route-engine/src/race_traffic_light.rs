@@ -19,16 +19,24 @@ pub(crate) struct Observation {
     pub pinned_cpu: Option<usize>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum WorkerMode {
+    Idle,
+    LocOnly,
+    LampAndLoc,
+}
+
 pub(crate) fn lamp_phase(phase: Option<&str>) -> bool {
     matches!(phase, Some("light_approach" | "light_wait"))
 }
 
-/// Block on phase changes outside the gantry. While active, inspect just the
-/// header until the camera atomically publishes a new capture.
+/// Block while idle. While active, inspect the shared-memory header until the
+/// camera atomically publishes a new capture, extract low-CPU visual features
+/// for field localization, and also run traffic-lamp detection at the gantry.
 pub(crate) fn spawn(
     path: PathBuf,
     events: Sender<Event>,
-) -> Option<(Sender<bool>, JoinHandle<()>)> {
+) -> Option<(Sender<WorkerMode>, JoinHandle<()>)> {
     let (phases, rx) = mpsc::channel();
     let thread = std::thread::Builder::new()
         .name("rust-light".into())
@@ -44,14 +52,14 @@ pub(crate) fn spawn(
                 let _ = std::fs::remove_file(&socket_path);
             }
             let mut detector = Detector::default();
-            let mut active = false;
+            let mut mode = WorkerMode::Idle;
             let mut last = None;
             let mut bytes = Vec::new();
             let mut header = [0; SHM_HEADER_LEN];
             loop {
-                if !active {
+                if mode == WorkerMode::Idle {
                     let Ok(next) = rx.recv() else { break };
-                    active = next;
+                    mode = next;
                     continue;
                 }
                 let phase_update = if let Some(socket) = &wake {
@@ -67,7 +75,7 @@ pub(crate) fn spawn(
                 };
                 match phase_update {
                     Ok(next) => {
-                        active = next;
+                        mode = next;
                         continue;
                     }
                     Err(RecvTimeoutError::Disconnected) => break,
@@ -92,18 +100,30 @@ pub(crate) fn spawn(
                     continue;
                 };
                 last = Some(frame);
-                let start = Instant::now();
-                let lights = detector.detect(pixels, w, h);
-                let obs = Observation {
+                let vis = crate::race_cam_features::extract_visual_frame(
+                    pixels,
+                    w,
+                    h,
                     frame,
                     captured_mono_s,
-                    lights,
-                    housing_lip: crate::traffic_lamp::housing_lip(pixels,w,h),
-                    pinned_cpu,
-                    compute_ms: start.elapsed().as_secs_f64() * 1000.,
-                };
-                if events.send(Event::RustLamp(obs, Instant::now())).is_err() {
+                );
+                if events.send(Event::RustCamLoc(Box::new(vis), Instant::now())).is_err() {
                     break;
+                }
+                if mode == WorkerMode::LampAndLoc {
+                    let start = Instant::now();
+                    let lights = detector.detect(pixels, w, h);
+                    let obs = Observation {
+                        frame,
+                        captured_mono_s,
+                        lights,
+                        housing_lip: crate::traffic_lamp::housing_lip(pixels, w, h),
+                        pinned_cpu,
+                        compute_ms: start.elapsed().as_secs_f64() * 1000.,
+                    };
+                    if events.send(Event::RustLamp(obs, Instant::now())).is_err() {
+                        break;
+                    }
                 }
             }
             if wake.is_some() {
@@ -134,7 +154,11 @@ mod tests {
         let (events, incoming) = mpsc::channel();
         let (phases, worker) = spawn(path.clone(), events).unwrap();
         assert!(incoming.recv_timeout(Duration::from_millis(24)).is_err());
-        phases.send(true).unwrap();
+        phases.send(WorkerMode::LampAndLoc).unwrap();
+        let Ok(Event::RustCamLoc(vis, _)) = incoming.recv_timeout(Duration::from_secs(2)) else {
+            panic!("no cam loc frame");
+        };
+        assert_eq!((vis.frame, vis.captured_mono_s), (7, 12.5));
         let Ok(Event::RustLamp(obs, _)) = incoming.recv_timeout(Duration::from_secs(2)) else {
             panic!("no lamp frame");
         };
