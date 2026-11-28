@@ -571,6 +571,18 @@ impl Maneuver {
                 self.second_track_id = id;
                 self._second_role_anchor = self.second_prior(&target, scan);
             }
+            if self.use_field_guidance()
+                && target.get("confirmed").is_true()
+                && py_eq(target.get("source_seq"), scan.get("seq"))
+                && target.get("support_bins").is_list()
+            {
+                let bins = bins_of(target.idx("support_bins"));
+                if !bins.is_empty() {
+                    let floats = Self::ranges_floats(scan);
+                    let (center, _) = support_center(&floats, &bins, target.get("diameter_m"));
+                    self.field_map.observe_cone(scan, 1, center);
+                }
+            }
             self.second_target = target;
             return;
         }
@@ -602,6 +614,18 @@ impl Maneuver {
             (a, b) => a.or(b),
         };
         self.second_target = self.second_tracker_mut().update_on_course(scan, now, false, heading, None, map_prior);
+        if self.use_field_guidance()
+            && self.second_target.get("confirmed").is_true()
+            && py_eq(self.second_target.get("source_seq"), scan.get("seq"))
+            && self.second_target.get("support_bins").is_list()
+        {
+            let bins = bins_of(self.second_target.idx("support_bins"));
+            if !bins.is_empty() {
+                let floats = Self::ranges_floats(scan);
+                let (center, _) = support_center(&floats, &bins, self.second_target.get("diameter_m"));
+                self.field_map.observe_cone(scan, 1, center);
+            }
+        }
         if self.full_target_points(&self.second_target.clone(), scan, &self.second_track_id.clone()).is_some() {
             self._second_role_anchor = self.second_prior(&self.second_target.clone(), scan);
         } else if self.second_target.is_none() {

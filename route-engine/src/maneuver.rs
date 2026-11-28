@@ -1842,6 +1842,11 @@ impl Maneuver {
                 let acquire = self.first_pass_evidence.is_none();
                 let prior = if acquire && self.use_field_guidance() {
                     self.field_map.prior(scan, &self.target_tracker.target, 0)
+                } else if self.use_field_guidance() {
+                    crate::compact_target::TrackingPrior {
+                        stable_echo_bins: self.field_map.stable_echo_bins_for(scan),
+                        ..Default::default()
+                    }
                 } else {
                     Default::default()
                 };
@@ -1850,6 +1855,19 @@ impl Maneuver {
             } else {
                 self.target_tracker.update(scan, now, true, None, None)
             };
+            if self.use_field_guidance()
+                && self.first_pass_evidence.is_none()
+                && self.compact_target.get("confirmed").is_true()
+                && py_eq(self.compact_target.get("source_seq"), scan.get("seq"))
+                && self.compact_target.get("support_bins").is_list()
+            {
+                let bins = bins_of(self.compact_target.idx("support_bins"));
+                if !bins.is_empty() {
+                    let floats = Self::ranges_floats(scan);
+                    let (center, _) = support_center(&floats, &bins, self.compact_target.get("diameter_m"));
+                    self.field_map.observe_cone(scan, 0, center);
+                }
+            }
             let corridor_drive =
                 self.route_stage == "corridor_follow" && self.phase == "drive" && !self.quality_resume_pending;
             if self.continue_route
@@ -1899,6 +1917,7 @@ impl Maneuver {
                 "command_acked"=>true,"physical_steering_confirmed"=>false};
                 self.target_tracker.widen_acquisition((radians(45.), PI));
                 evidence.set("handover_basis", "localized_first_cone_and_adopted_steering");
+                evidence.set("cone_position_source", self.field_map.cone_guidance_source(0));
             }
             self.route_event("first_approach_handover", scan, control, evidence);
         }

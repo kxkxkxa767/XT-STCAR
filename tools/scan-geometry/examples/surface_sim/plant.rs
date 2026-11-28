@@ -37,6 +37,7 @@ pub struct Plant {
     servo_delay: f64,
     motor_delay: f64,
     servo_tau: f64,
+    servo_rate_cap: f64,
     play: f64,
     gain: f64,
     /// Left turns only; `gain` when absent.
@@ -128,6 +129,7 @@ impl Plant {
             servo_delay: number(config, "servo_delay_s", 0.15),
             motor_delay: number(config, "motor_delay_s", 0.10),
             servo_tau: number(config, "servo_tau_s", 0.10),
+            servo_rate_cap: number(config, "servo_rate_cap_pwm_s", 2200.0),
             play: number(config, "steering_play_pwm", 40.),
             gain: number(config, "steering_gain", 1.2),
             gain_left: number(config, "steering_gain_left", number(config, "steering_gain", 1.2)),
@@ -155,6 +157,7 @@ impl Plant {
         assert!(plant.servo_tau > 0. && plant.coast > 0. && plant.brake > 0. && plant.brake_speed_gain >= 0.);
         assert!(plant.resistance_scale > 0. && plant.traction_mu > 0.);
         assert!(plant.motor_delay >= 0. && plant.servo_delay >= 0.);
+        assert!(plant.servo_rate_cap > 0.0);
         plant
     }
 
@@ -162,6 +165,7 @@ impl Plant {
         let mut model = json!({
             "speed_table": self.speed_table, "motor_delay_s": self.motor_delay,
             "servo_delay_s": self.servo_delay, "servo_tau_s": self.servo_tau,
+            "servo_rate_cap_pwm_s": self.servo_rate_cap,
             "steering_play_pwm": self.play, "steering_gain": self.gain, "steering_gain_left": self.gain_left, "turn_drag": self.turn_drag, "turn_scrub": self.turn_scrub,
             "response_table": self.response_table,
             "coast_decel_mps2": self.coast, "brake_decel_mps2": self.brake,
@@ -217,8 +221,9 @@ impl Plant {
         while self.servo_queue.front().is_some_and(|c| c.0 <= t) {
             self.last_servo = self.servo_queue.pop_front().unwrap().1;
         }
-        self.physical_servo +=
-            (self.last_servo - self.physical_servo) * (dt / self.servo_tau).min(1.);
+        let response = (self.last_servo - self.physical_servo) * (dt / self.servo_tau).min(1.);
+        let max_step = self.servo_rate_cap * dt;
+        self.physical_servo += response.clamp(-max_step, max_step);
         self.wheel_pwm = self.wheel_pwm.clamp(
             self.physical_servo - self.play,
             self.physical_servo + self.play,
@@ -258,5 +263,31 @@ impl Plant {
         while self.history.len() > 2 && self.history[1].0 < t - 1. {
             self.history.pop_front();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn steering_reversal_command_precedes_rate_limited_wheel_response() {
+        let mut output = crate::supervisor::SteerOutput::default();
+        assert_eq!(output.physical(&1441.into(), None), 1403);
+        assert_eq!(output.physical(&1444.into(), None), 1486);
+
+        let mut plant = Plant::new(Pose { x: 0.4, y: 0.45, yaw: 0.0 },
+            &json!({"servo_delay_s":0.10,"servo_tau_s":0.06,"servo_rate_cap_pwm_s":1400.0}));
+        for i in 0..5 {
+            plant.step(i as f64 * 0.02, 0.02, 1500, 1750);
+        }
+        assert_eq!(plant.physical_servo, 1500.0);
+        plant.step(0.10, 0.02, 1500, 1750);
+        assert_eq!(plant.physical_servo, 1528.0);
+        assert_eq!(plant.wheel_pwm, 1500.0);
+        plant.step(0.12, 0.02, 1500, 1750);
+        assert_eq!(plant.wheel_pwm, 1516.0);
+        let standard = Plant::new(Pose {x: 0.4, y: 0.45, yaw: 0.0}, &json!({}));
+        assert_eq!(standard.servo_rate_cap, 2200.0);
     }
 }

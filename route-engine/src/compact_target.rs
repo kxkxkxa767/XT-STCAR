@@ -316,8 +316,37 @@ pub struct CandidateArgs {
 pub struct TrackingPrior {
     /// Last measured surface point transported into this scan's body frame.
     pub carried: Option<(f64, f64)>,
-    /// Surveyed (or subsequently observed) cone centre in this scan's frame.
+    /// Independently observed cone centre in this scan's frame.
     pub center: Option<(f64, f64)>,
+    pub stable_echo_bins: Option<ConeReturnBins>,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ConeReturnBins([u64; 6]);
+
+impl ConeReturnBins {
+    pub(crate) fn insert(&mut self, bin: usize) {
+        self.0[bin / 64] |= 1 << (bin % 64);
+    }
+
+    pub(crate) fn extend(&mut self, other: Self) {
+        for (word, extra) in self.0.iter_mut().zip(other.0) {
+            *word |= extra;
+        }
+    }
+}
+
+impl TrackingPrior {
+    pub(crate) fn accepts_echo(&self, target: &V) -> bool {
+        let Some(mask) = self.stable_echo_bins else { return true };
+        let bins = target.idx("support_bins").l();
+        let supported = bins.iter().filter(|b| {
+            let i = b.i() as usize;
+            i < 360 && mask.0[i / 64] & (1 << (i % 64)) != 0
+        }).count();
+        supported >= 2 && supported * 2 >= bins.len()
+            && self.center.is_none_or(|p| dist(point_of(target.idx("point_left_m")), p) <= 0.45)
+    }
 }
 
 impl Default for CandidateArgs {
@@ -712,7 +741,7 @@ impl CompactTargetTracker {
             only_support_bins,
             TrackingPrior {
                 carried: predicted,
-                center: None,
+                ..Default::default()
             },
         )
     }
@@ -839,6 +868,9 @@ impl CompactTargetTracker {
             },
         );
         found.retain_mut(|candidate| {
+            if !prior.accepts_echo(candidate) {
+                return false;
+            }
             if (candidate.idx("support_bins").l().len() as i64) < normal_min {
                 if !near_map(candidate) {
                     return false;

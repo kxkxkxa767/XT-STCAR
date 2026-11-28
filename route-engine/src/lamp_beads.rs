@@ -409,6 +409,102 @@ fn rim_visible(frame: &Frame<'_>, lens: Lens, mid: usize) -> bool {
 }
 
 impl Beads {
+    pub(super) fn backplate(&self, frame: &Frame<'_>) -> Option<crate::race_lamp_range::Edges> {
+        let mut best: Option<(f64, crate::race_lamp_range::Edges)> = None;
+        let geometry = |marker: Lens, step: (f64, f64), y: f64, triplet: bool| {
+            let (cx, cy) = marker.centre();
+            let size = (marker.h as f64).max((marker.w as f64).min(step.0 * 0.55));
+            let centre_y = y.clamp(cy - 0.45 * size, cy + 0.45 * size);
+            let e = super::housing::metric_edges(frame, (cx, centre_y), step, size)?;
+            let dual = e.top.is_some() && e.bottom.is_some();
+            (triplet || dual).then_some((size * if dual { 2.0 } else { 1.0 }, e))
+        };
+        let mut triplet = |l: Lens, m: Lens, r: Lens| {
+            let (lx, ly) = l.centre();
+            let (rx, ry) = r.centre();
+            if let Some(hit) =
+                geometry(m, ((rx - lx) * 0.5, (ry - ly) * 0.5), (ry + ly) * 0.5, true)
+                && best.is_none_or(|(score, _)| hit.0 > score)
+            {
+                best = Some(hit);
+            }
+        };
+        for &(l, m, r) in &self.panels {
+            triplet(l, m, r);
+        }
+        // In sunlight an amber cover can look red. Require the midpoint of two
+        // neighbouring end covers and an actual outer edge, independently of lamp colour votes.
+        for &m in self
+            .middle_covers
+            .iter()
+            .chain(self.lenses.iter().filter(|l| l.kind == RED))
+        {
+            let (mx, my) = m.centre();
+            let size = m.w.max(m.h) as f64;
+            let end = |kind, sign: f64| {
+                self.lenses
+                    .iter()
+                    .chain(&self.white_ends)
+                    .copied()
+                    .filter(|l| {
+                        let (x, y) = l.centre();
+                        let dx = (x - mx) * sign;
+                        l.kind == kind
+                            && (1.05 * size..=3.2 * size).contains(&dx)
+                            && (y - my).abs() < 0.55 * size
+                            && l.h * 2 >= m.h
+                            && m.h * 2 >= l.h
+                    })
+                    .min_by(|a, b| {
+                        let score = |l: Lens| {
+                            let (x, y) = l.centre();
+                            ((x - mx).abs() - 2.0 * size).abs() + (y - my).abs()
+                        };
+                        score(*a).total_cmp(&score(*b))
+                    })
+            };
+            if let (Some(l), Some(r)) = (end(RED, -1.0), end(GREEN, 1.0)) {
+                let (x, y) = l.centre();
+                let (xx, yy) = r.centre();
+                if ((xx + x) * 0.5 - mx).hypot((yy + y) * 0.5 - my) <= 0.48 * size
+                    && frame_edges(frame, l, r) > 0
+                {
+                    triplet(l, m, r);
+                }
+            }
+        }
+        if let Some((_, e)) = best {
+            return Some(e);
+        }
+        for &m in &self.middle_covers {
+            let (mx, my) = m.centre();
+            for &end in self.lenses.iter().chain(&self.white_ends) {
+                let (ex, ey) = end.centre();
+                let sign = if end.kind == RED { -1.0 } else { 1.0 };
+                let (dx, dy) = ((ex - mx) * sign, (ey - my) * sign);
+                let d = m.w.max(m.h) as f64;
+                if !(d..=3.2 * d).contains(&dx)
+                    || dy.abs() > 0.42 * dx
+                    || end.h * 2 < m.h
+                    || end.h > 2 * m.h
+                    || !endpoint_colour(frame, end)
+                {
+                    continue;
+                }
+                let (b, g, r) = frame.pixel(((ex + mx) * 0.5) as usize, ((ey + my) * 0.5) as usize);
+                if u16::from(b) + 2 * u16::from(g) + u16::from(r) > 4 * 110 {
+                    continue;
+                }
+                if let Some(hit) = geometry(m, (dx, dy), my, false)
+                    && best.is_none_or(|(s, _)| hit.0 > s)
+                {
+                    best = Some(hit);
+                }
+            }
+        }
+        best.map(|(_, e)| e)
+    }
+
     fn collect(&mut self, frame: &Frame<'_>) {
         let step = (frame.width / 320).max(1);
         let cols = frame.width.div_ceil(step);

@@ -15,6 +15,8 @@ pub fn main(_args: &[String]) -> i32 {
     let stdout = std::io::stdout();
     let mut out = BufWriter::with_capacity(1 << 16, stdout.lock());
     let mut loc = Locator::default();
+    let mut lamp = crate::race_light::RaceLight::default();
+    let mut lamp_detector = crate::traffic_lamp::Detector::default();
     let mut bgr_buf: Vec<u8> = Vec::with_capacity(IMG_W * IMG_H * 3);
     let mut line = String::new();
     let mut reader = stdin.lock();
@@ -40,6 +42,7 @@ pub fn main(_args: &[String]) -> i32 {
         let resp = match req.get("op").os() {
             Some("reset") => {
                 loc = Locator::default();
+                lamp = Default::default();
                 crate::dict! {"ok" => true}
             }
             Some("set_state") => {
@@ -92,15 +95,42 @@ pub fn main(_args: &[String]) -> i32 {
                         let valid_cols = vis.valid_cols as i64;
                         let n_edges = vis.n_vert_edges as i64;
                         let n_cones = vis.n_cones as i64;
+                        let cones_list: Vec<V> = vis.cones[..vis.n_cones as usize]
+                            .iter()
+                            .map(|c| {
+                                crate::dict! {
+                                    "kind" => match c.kind {
+                                        crate::race_cam_features::ConeKind::RedOrange => "red_orange",
+                                        crate::race_cam_features::ConeKind::Blue => "blue",
+                                    },
+                                    "u" => c.u as f64,
+                                    "v_top" => c.v_top as f64,
+                                    "v_bot" => c.v_bot as f64,
+                                    "width_px" => c.width_px as f64,
+                                    "height_px" => c.height_px as f64,
+                                    "conf" => c.confidence as f64,
+                                }
+                            })
+                            .collect();
                         let rail_frac = vis.rail_fraction as f64;
                         let mean_luma = vis.mean_luma as f64;
                         let compute_us = vis.compute_us as i64;
+                        let mut housing = None;
+                        if req.get("lamp_geometry").truthy() {
+                            lamp_detector.detect(&bgr_buf,w,h);
+                            if let Some(edges)=lamp_detector.backplate(&bgr_buf,w,h) {
+                                lamp.housing.latest=Some(crate::race_lamp_range::Sighting {frame,at:captured_at,edges});
+                                housing=Some(V::list(vec![edges.u.into(),edges.top.into(),edges.bottom.into()]));
+                            }
+                        }
                         loc.observe_camera(vis, captured_at);
                         crate::dict! {
                             "ok" => true,
                             "valid_cols" => valid_cols,
+                            "housing_edges_px" => housing,
                             "n_edges" => n_edges,
                             "n_cones" => n_cones,
+                            "cones" => V::list(cones_list),
                             "rail_fraction" => rail_frac,
                             "mean_luma" => mean_luma,
                             "compute_us" => compute_us,
@@ -128,10 +158,35 @@ pub fn main(_args: &[String]) -> i32 {
                     "received_at" => at,
                     "ranges" => req.get("ranges").clone(),
                 };
+                if let Some(ms) = req.get("at_ms").oi() { scan.set("at_ms", ms); }
                 if !req.get("point_age_ms").is_none() {
                     scan.set("point_age_ms", req.get("point_age_ms").clone());
                 }
                 loc.observe(&scan, at, live, at_start);
+                let mut lamp_audit=V::None;
+                if req.get("lamp_geometry").truthy() && let Some(heading)=loc.heading(&scan) {
+                    let lane=loc.finish_lane(&scan);
+                    let mapped=loc.motion_supported(&scan).then(||loc.finish_divider_ahead(&scan)).flatten();
+                    let speed=loc.axis_speed(&scan);
+                    let edge=lamp.observe_lane_tip(&scan,heading,&lane,mapped,loc.body_speed(&scan).unwrap_or(0.0),
+                        live.yaw_rate.unwrap_or(0.0),speed);
+                    let candidate=lamp.housing.latest.and_then(|shot| loc.housing_plane(&scan,shot).map(|p|(shot,p)));
+                    lamp.register_housing(&loc,&scan,heading);
+                    // Withhold independent post ranges from the estimator in this replay.
+                    let ahead=lamp.opening_ahead(&scan,heading,&lane,crate::race_light::OpeningSupport {
+                        mapped,edge,axis_speed:speed,..Default::default()});
+                    let wheel=ahead.and_then(|d|crate::maneuver::Maneuver::wheel_gap_to_lamp(d,heading,&lane,&V::None));
+                    lamp.observe_beam(at,wheel);
+                    lamp_audit=crate::dict! {"frame"=>candidate.map(|(s,_)|s.frame),
+                        "capture_s"=>candidate.map(|(s,_)|s.at),"scan_s"=>at,
+                        "optical_ahead_m"=>candidate.map(|(_,p)|p.ahead),"optical_offset_m"=>candidate.map(|(_,p)|p.offset),
+                        "both_edges"=>candidate.map(|(_,p)|p.both),"uncertainty_m"=>candidate.map(|(_,p)|p.uncertainty),
+                        "registered_offset_m"=>lamp.housing.registered.map(|r|r.offset),
+                        "end_span_m"=>lamp.housing.registered.and_then(|r|r.end_span),"map_divider_m"=>mapped,
+                        "tip_m"=>edge,"raw_tip_m"=>lamp.raw_tip,"effective_gantry_m"=>ahead,"source"=>lamp.opening_source,
+                        "wheel_gap_m"=>wheel,"beam_at"=>lamp.beam_at,
+                        "effective_beam_m"=>ahead.map(|d|d-crate::maneuver::LIGHT_SENSOR_TO_GANTRY_M)};
+                }
                 let diag = loc.diagnostics(&scan);
                 let aim_json = |side: usize| -> V {
                     if let Some(a) = loc.planner.aim(seq, side) {
@@ -149,6 +204,7 @@ pub fn main(_args: &[String]) -> i32 {
                 crate::dict! {
                     "ok" => true,
                     "localized" => diag.get("localized").truthy(),
+                    "lamp_geometry" => lamp_audit,
                     "pose" => diag.get("pose_xy_yaw").clone(),
                     "raw_pose" => loc.raw_pose_xy_yaw().map(|p| vec![p.0, p.1, p.2]),
                     "speed" => diag.get("speed_mps").clone(),
@@ -161,6 +217,14 @@ pub fn main(_args: &[String]) -> i32 {
                     "cam_pitch_deg" => diag.get("cam_pitch_deg").clone(),
                     "cam_yaw_deg" => diag.get("cam_yaw_deg").clone(),
                     "cam_rail_h_m" => diag.get("cam_rail_h_m").clone(),
+                    "observed_cones_world" => diag.get("observed_cones_world").clone(),
+                    "cone_sources" => diag.get("cone_sources").clone(),
+                    "cone_guidance_sources" => diag.get("cone_guidance_sources").clone(),
+                    "guided_cones_world" => diag.get("guided_cones_world").clone(),
+                    "cone_observation_age_s" => diag.get("cone_observation_age_s").clone(),
+                    "cone_radar_cluttered" => diag.get("cone_radar_cluttered").clone(),
+                    "inertial_cone_preview" => diag.get("inertial_cone_preview").clone(),
+                    "deferred_cone_echoes" => diag.get("deferred_cone_echoes").clone(),
                     "aim0" => aim_json(0),
                     "aim1" => aim_json(1),
                 }

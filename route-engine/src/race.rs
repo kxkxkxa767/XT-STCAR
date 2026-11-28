@@ -590,9 +590,11 @@ impl Program {
             }
             Event::RustLamp(obs, received) => {
                 let now = self.at(received);
-                let captured = self.base_monotonic_s.map(|base| obs.captured_mono_s - base)
-                    .unwrap_or(now - obs.compute_ms / 1000.);
+                let exposure = self.base_monotonic_s.map(|base| obs.captured_mono_s - base);
+                let captured = exposure.unwrap_or(now - obs.compute_ms / 1000.);
+                let edges = exposure.and(obs.housing_edges).map(|e| V::list(vec![e.u.into(),e.top.into(),e.bottom.into()]));
                 let row = dict! {"frame" => obs.frame, "captured_at" => captured, "received_at" => now,
+                    "housing_edges_px"=>edges.clone(),
                     "red" => obs.lights.red, "green" => obs.lights.green, "housing_lip_y"=>obs.housing_lip,"compute_ms" => obs.compute_ms,
                     "pinned_cpu" => obs.pinned_cpu.map(|n| n as i64),
                     "capture_to_result_ms" => self.base_monotonic_s.map(|_| (now - captured) * 1000.)};
@@ -601,7 +603,8 @@ impl Program {
                     && (0.0..=crate::maneuver::LIGHT_FRAME_MAX_AGE_S).contains(&(self.mono() - captured))
                 {
                     let light = dict! {"frame" => obs.frame, "captured_at" => captured,
-                        "red" => i64::from(obs.lights.red), "green" => i64::from(obs.lights.green),"housing_lip_y"=>obs.housing_lip};
+                        "red" => i64::from(obs.lights.red), "green" => i64::from(obs.lights.green),"housing_lip_y"=>obs.housing_lip,
+                        "housing_edges_px"=>edges};
                     self.apply_light(light);
                 }
             }

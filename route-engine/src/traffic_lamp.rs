@@ -405,6 +405,12 @@ mod tests {
 }
 
 impl Detector {
+    /// Use the lens components collected by the immediately preceding `detect` on this frame.
+    pub(crate) fn backplate(&self, bgr: &[u8], width: usize, height: usize) -> Option<crate::race_lamp_range::Edges> {
+        if width<16 || height<16 || width.checked_mul(height)?.checked_mul(3)?!=bgr.len() { return None; }
+        self.beads.backplate(&Frame { bgr, width, height })
+    }
+
     pub fn detect(&mut self, bgr: &[u8], width: usize, height: usize) -> Lights {
         if width < 16
             || height < 16

@@ -631,12 +631,12 @@ impl Maneuver {
 
     /// _open_loop_geometry(scan, target, identity, side, axis, pose).
     pub fn open_loop_geometry(&mut self, scan: &V, target: &V, identity: &V, side: i64, axis: f64, pose: Option<(f64, f64, f64, f64)>) -> V {
-        let Some(heading) = self.compass.current(scan).or_else(||self.field_map.heading(scan)) else { return V::None };
+        let Some(heading) = self.compass.current(scan).or_else(||self.field_map.cone_heading(scan)) else { return V::None };
         let measured = self.full_target_points(target, scan, identity).is_some();
         let cone = usize::from(side < 0);
-        let map_aim = if self.use_field_guidance() {
+        let mut map_aim = if self.use_field_guidance() {
             self.field_map
-                .heading(scan)
+                .cone_heading(scan)
                 .and_then(|_| self.field_map.planner.aim(scan.idx("seq").i(), cone))
         } else {
             None
@@ -648,6 +648,7 @@ impl Maneuver {
             };
             return dict! {"source_seq"=>scan.get("seq").clone(),"track_id"=>identity.clone(),
             "basis"=>"surveyed_trajectory_speed_preview","support_source"=>"surveyed_cone_and_localized_pose",
+            "cone_position_source"=>self.field_map.cone_guidance_source(cone),
             "support_center_left_m"=>V::from(center),"support_radius_m"=>self.slot_mut(side).radius.unwrap_or(0.10),
             "axis_rad"=>axis,"compass_heading_rad"=>heading,"progress_rad"=>side as f64*(heading-axis),
             "carrot_left_m"=>V::from(aim.point),"pursuit_mode"=>if aim.before>0. {"approach_line"} else {"circle"},
@@ -660,9 +661,12 @@ impl Maneuver {
         if side > 0 && let Some(input)=self.race_inputs {
             self.race_crosswalk.cone_motion.observe(scan,self.last_now,identity,center,input);
         }
-        if map_aim.is_some() {
+        if self.use_field_guidance() {
             self.field_map.observe_cone(scan, cone, center);
+            map_aim = self.field_map.planner.aim(scan.idx("seq").i(), cone);
         }
+        let cluttered_guidance = self.field_map.stable_echo_bins_for(scan).is_some()
+            && self.field_map.planning_center(scan, cone).is_some();
         let rate = self.compass.rate;
         let race = self.race_inputs.is_some();
         let late_sight = self.wall_turn.late_sight;
@@ -843,6 +847,9 @@ impl Maneuver {
         let loop_center = (center.0 + a * e1.0 + b * e2.0, center.1 + a * e1.1 + b * e2.1);
         let support = Some((center, radius + SIDE_BODY_EXTENT_M + OPEN_CARROT_SUPPORT_GAP_M));
         let plan_radius = plan.idx("radius_m").f();
+        // An offset local circle can clear the sampled boards yet cut inside the
+        // measured cone. Compare the inside edge of that circle to the cone body.
+        let inside_cone_gap = plan_radius - hypot(a, b) - radius - SIDE_BODY_EXTENT_M;
         let (mut carrot, mode, before) = loop_carrot(loop_center, plan_radius, sidef, lookahead, e1, e2, support);
         slot.approaching = Some(before > 0.);
         // Race, loop one: a car inside its circle pursues a wider one (see race_first_cone).
@@ -930,7 +937,14 @@ impl Maneuver {
                 out.set("lidar_target_pwm",pwm);
                 let sparse=target.get("map_assisted_sparse_returns").is_true();
                 let missing=self.field_map.missing_fraction();
-                if sparse || missing>0.15 {
+                if cluttered_guidance || (inside_cone_gap < OPEN_INNER_GAP_M
+                    && self.field_map.landmark(scan, cone).is_some()) {
+                    out.set("pursuit_curvature_per_m", aim.curvature);
+                    out.set("target_pwm", aim.pwm);
+                    out.set("steering_basis", if cluttered_guidance { "cluttered_lidar_map_preview" }
+                        else { "measured_cone_inside_local_circle" });
+                    out.set("cone_position_source", self.field_map.cone_guidance_source(cone));
+                } else if sparse || missing>0.15 {
                     let geometric=(1.-missing)*(bins.len() as f64/5.).min(1.);
                     let weight=if sparse {geometric} else {geometric.max(0.65)};
                     let k=weight*curvature+(1.-weight)*aim.curvature;
@@ -1003,7 +1017,7 @@ impl Maneuver {
         let (cx, cy) = (c[0].f(), c[1].f());
         let length = cx.hypot(cy).max(1e-6);
         if !strip_clear(
-            &scan_points(&Self::ranges_floats(scan), OPEN_APPROACH_CHECK_M + 1.),
+            &scan_points(self.field_map.filtered_ranges(), OPEN_APPROACH_CHECK_M + 1.),
             (OPEN_APPROACH_CHECK_M * cx / length, OPEN_APPROACH_CHECK_M * cy / length),
             Some((x, y)),
             plan.idx("support_radius_m").f() + OPEN_SUPPORT_SKIP_M,
@@ -1011,7 +1025,8 @@ impl Maneuver {
             return V::None;
         }
         plan.update(&dict! {"range_m"=>distance,"bearing_left_rad"=>bearing,
-        "basis"=>"surveyed_first_cone_approach","approach_strip_clear"=>true});
+        "basis"=>"surveyed_first_cone_approach","approach_strip_clear"=>true,
+        "cone_position_source"=>self.field_map.cone_guidance_source(0)});
         self.open_loop = plan.clone();
         plan
     }
@@ -1287,7 +1302,8 @@ impl Maneuver {
         } else {
             self.second_track_id = V::Int(-2);
             self.role_distinct_evidence =
-                dict! {"basis"=>"localized_second_cone_approach","source_seq"=>scan.get("seq").clone()};
+                dict! {"basis"=>"localized_second_cone_approach","source_seq"=>scan.get("seq").clone(),
+                    "cone_position_source"=>self.field_map.cone_guidance_source(1)};
         }
         self._second_recovering = false;
         self.second_target_handover_observed = true;
@@ -1354,6 +1370,11 @@ impl Maneuver {
         let mut ahead: Vec<(V, f64, f64)> = Vec::new();
         let mut boards: Option<std::rc::Rc<Vec<Line>>> = None;
         let floats = Self::ranges_floats(scan);
+        let prior = if self.use_field_guidance() {
+            self.field_map.prior(scan, self.second_tracker.as_ref().map_or(&V::None, |t| &t.target), 1)
+        } else {
+            Default::default()
+        };
         for target in candidates(
             scan.idx("ranges"),
             CandidateArgs {
@@ -1364,6 +1385,9 @@ impl Maneuver {
                 ..CandidateArgs::default()
             },
         ) {
+            if !prior.accepts_echo(&target) {
+                continue;
+            }
             let p = target.idx("point_left_m").l();
             let (x, y) = (p[0].f(), p[1].f());
             let (along, lateral) = (e1.0 * x + e1.1 * y, e1.0 * y - e1.1 * x);
@@ -1457,15 +1481,20 @@ impl Maneuver {
             tracked.set("ranges", V::list(masked));
             self._open_lookout_seq = Some(scan.idx("seq").i());
         }
-        let prior = if self.use_field_guidance() {
-            self.field_map
-                .prior(scan, self.second_tracker.as_ref().map_or(&V::None, |t| &t.target), 1)
-        } else {
-            Default::default()
-        };
         let target = self
             .second_tracker_mut()
             .update_on_course(&tracked, now, true, Some(heading), None, prior);
+        if self.use_field_guidance()
+            && target.get("confirmed").is_true()
+            && py_eq(target.get("source_seq"), scan.get("seq"))
+            && target.get("support_bins").is_list()
+        {
+            let bins = bins_of(target.idx("support_bins"));
+            if !bins.is_empty() {
+                let (center, _) = support_center(&floats, &bins, target.get("diameter_m"));
+                self.field_map.observe_cone(scan, 1, center);
+            }
+        }
         self.second_target = target;
         self.role_distinct_evidence = proof;
         self.second_acquisition_reason = Some(self.second_tracker.as_ref().unwrap().reason.clone());

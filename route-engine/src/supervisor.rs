@@ -1113,7 +1113,13 @@ impl Supervisor {
             s.motion_scan_seq = s.report.get("coast_motion").get("source_scan_seq").clone();
         }
         let motion = s.report.get("coast_motion").clone();
-        if motion.get("observable").truthy() && motion.get("stationary").truthy() {
+        let finish_map_still = s.coast_reason.as_deref() == Some("route_finish_zone_stop")
+            && self.race_program
+            && neutral_ack
+            && s.motion
+                .field_map
+                .stationary_for(&scan, crate::coast::MIN_RECEIVE_STABLE_S);
+        if (motion.get("observable").truthy() && motion.get("stationary").truthy()) || finish_map_still {
             s.report.set("standstill_confirmed", true);
             let reason = s.coast_reason.clone().unwrap_or_default();
             return halt(reason);

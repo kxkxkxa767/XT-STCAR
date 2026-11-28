@@ -224,6 +224,13 @@ impl Maneuver {
         if self._light_frames.last().is_some_and(|f| py_eq(f.at(0), frame)) {
             return;
         }
+        if self.race_program && matches!(self.route_stage, "light_entry" | "light_lane")
+            && let Some([u,top,bottom]) = light.get("housing_edges_px").ol()
+            && let Some(u) = u.of() {
+            self.race_light.housing.latest = Some(crate::race_lamp_range::Sighting {
+                frame:frame.i(), at:captured.f(), edges:crate::race_lamp_range::Edges {u,top:top.of(),bottom:bottom.of()}
+            });
+        }
         if self.race_program && light.has("housing_lip_y") && self.light_motor_stage()
             && (0. ..=LIGHT_FRAME_MAX_AGE_S).contains(&(now-captured.f())) {
             self.race_light.trim.view(captured.f(),light.get("housing_lip_y").of());
@@ -436,13 +443,17 @@ impl Maneuver {
             .and_then(|input| self.race_light.project(scan, heading, now, input));
         let divider = measured_divider.or_else(|| {
             self.use_field_guidance()
-                .then(|| self.field_map.gantry_ahead(scan))
+                .then(|| self.field_map.finish_divider_ahead(scan))
                 .flatten()
         });
         let board = measured_divider
             .zip(self.race_light.landmark())
             .map(|(d, (_, offset))| d + offset)
             .or_else(|| self.lane_front_range(scan));
+        // Only the gantry association prior moves with the fixture. The measured
+        // divider and end-wall ranges above keep their original physical origins.
+        let divider = self.race_light.housing.ahead(self.field_map.finish_divider_ahead(scan),None,None)
+            .map(|(d,_)|d).or(divider);
         let last_plane = self._light_line.get("along_m").of();
         let transported = last_plane.zip(board).zip(self._light_line.get("board_m").of())
             .map(|((line,wall),last_wall)| line+wall-last_wall);
@@ -647,7 +658,7 @@ impl Maneuver {
 
     /// The beam spans the lane. Use the first front tyre that can actually
     /// intersect that segment as the car straightens into it.
-    fn front_wheel_to_beam(&self, ahead: f64, heading: f64, lane: &V) -> Option<f64> {
+    pub(crate) fn wheel_gap_to_lamp(ahead: f64, heading: f64, lane: &V, light_line: &V) -> Option<f64> {
         let bounds = lane
             .get("outer_lateral_m")
             .of()
@@ -656,7 +667,7 @@ impl Maneuver {
                 Some((inner, outer))
             })
             .or_else(|| {
-                let legs = self._light_line.get("legs").ol()?;
+                let legs = light_line.get("legs").ol()?;
                 let [a, b] = legs else {
                     return None;
                 };
@@ -673,6 +684,10 @@ impl Maneuver {
                     .then_some(ahead - (FRONT_WHEEL_REFERENCE_M * cos - side * sin) - LIGHT_SENSOR_TO_GANTRY_M)
             })
             .min_by(f64::total_cmp)
+    }
+
+    fn front_wheel_to_beam(&self, ahead: f64, heading: f64, lane: &V) -> Option<f64> {
+        Self::wheel_gap_to_lamp(ahead, heading, lane, &self._light_line)
     }
 
     /// Follow the finish straight's opening throughout the compulsory race stop.
@@ -696,12 +711,13 @@ impl Maneuver {
                     && matches!(self._light_line.get("source").os(), Some("legs" | "board_odometry"))
             });
             let wall_fix = self.use_field_guidance() && self.field_map.motion_supported(scan);
-            let mapped = wall_fix.then(|| self.field_map.gantry_ahead(scan)).flatten();
+            let mapped = wall_fix.then(|| self.field_map.finish_divider_ahead(scan)).flatten();
             let axis_speed = wall_fix.then(||self.field_map.axis_speed(scan)).flatten()
                 .or_else(||self.race_light.last_speed.filter(|(t,_)|now-t<=SCAN_AGE_S).map(|(_,v)|v));
             let body=self.field_map.body_speed(scan).or_else(||self.race_light.body_speed(scan,now,self.race_inputs.and_then(|i|i.forward_integral))).unwrap_or(0.);
             let yaw=self.race_inputs.and_then(|i|i.yaw_rate).unwrap_or(0.);
             let edge=self.race_light.observe_lane_tip(scan,heading,lane,mapped,body,yaw,axis_speed);
+            self.race_light.register_housing(&self.field_map,scan,heading);
             let support = crate::race_light::OpeningSupport {mapped,station,axis_speed,edge,
                 sees_both_stations:self._light_line.get("measured_both_stations").is_true(),
                 live_legs:self._light_line.get("source").os()==Some("legs")};
@@ -726,7 +742,7 @@ impl Maneuver {
                 }
                 self.light_stop_state = Some("approach");
                 let wheel_gap = if lane.get("outer_lateral_m").of().is_none()
-                    && matches!(self.race_light.opening_source,Some("surveyed_finish_opening"|"registered_station_opening"))
+                    && matches!(self.race_light.opening_source,Some("surveyed_finish_opening"|"registered_station_opening"|"housing_from_mapped_divider"|"housing_from_divider_tip"|"housing_from_end_board"|"measured_housing"))
                 {
                     self.front_wheel_to_beam(distance, heading, &self.field_map.finish_lane(scan))
                 } else {
@@ -862,9 +878,11 @@ impl Maneuver {
         if applied==Some(crate::race_light_brake::LIGHT_BRAKE_MOTOR) && self.race_light_brake.has_braked() {self.race_light.trim.brake_acked=true;}
         self.race_light_brake.resume_after_forward(applied, current_speed.or(speed));
         let fresh_gantry = match self.race_light.opening_source {
+            Some("housing_from_divider_tip") => self.race_light.raw_tip.is_some(),
+            Some("housing_from_end_board" | "measured_housing") => true,
             Some("confirmed_gantry_stations") => self._light_line.get("source").os() == Some("legs"),
             Some("end_board_to_measured_opening" | "visible_divider_opening" | "measured_right_board_opening") => true,
-            Some("surveyed_finish_opening"|"registered_station_opening") => self.field_map.motion_supported(scan),
+            Some("surveyed_finish_opening"|"registered_station_opening"|"housing_from_mapped_divider") => self.field_map.motion_supported(scan),
             _ => false,
         };
         let range_speed = self.race_light_brake.observe_range_speed(now, speed.filter(|_| fresh_gantry),
@@ -966,7 +984,7 @@ impl Maneuver {
         });
         let rear_gap = ahead.map(|a| a + rear_extent);
         let rear_past_sensor = rear_gap.map(|g| zone_length - g);
-        let tip_supported=matches!(self.race_light.opening_source,Some("measured_right_board_opening"|"carried_right_board_opening"|"registered_station_opening"));
+        let tip_supported=matches!(self.race_light.opening_source,Some("measured_right_board_opening"|"carried_right_board_opening"|"registered_station_opening"|"housing_from_mapped_divider"|"housing_from_divider_tip"|"housing_from_end_board"|"measured_housing"));
         // The last car stop was on the opening edge within scan resolution,
         // after both end lights had already clipped. Don't certify a positive
         // millimetre as being upstream; use the existing measured inch-back.
@@ -1054,7 +1072,9 @@ impl Maneuver {
                     let fresh = match source {
                         "visible_divider_opening" | "measured_right_board_opening" => true,
                         "confirmed_gantry_stations" => self._light_line.get("source").os() == Some("legs"),
-                        "surveyed_finish_opening"|"registered_station_opening" => self.field_map.two_measured_axes(scan),
+                        "surveyed_finish_opening"|"registered_station_opening"|"housing_from_mapped_divider" => self.field_map.two_measured_axes(scan),
+                        "housing_from_divider_tip" => self.race_light.raw_tip.is_some(),
+                        "housing_from_end_board" | "measured_housing" => true,
                         _ => false,
                     };
                     fresh.then_some((source, ahead?))
@@ -1083,7 +1103,7 @@ impl Maneuver {
 
         let feedback = dict! {"goal" => "light", "front_range_m" => ahead, "front_gap_m" => gap,
             "completing_surveyed_stop" => self.race_light.completing_zone_stop && self.race_light.opening_source==Some("surveyed_finish_opening"),
-            "surveyed_front_gap_m" => self.field_map.gantry_ahead(scan).map(|d| d-front_extent),
+            "surveyed_front_gap_m" => self.field_map.finish_divider_ahead(scan).map(|d| d-front_extent),
             "completing_zone_stop" => self.race_light.completing_zone_stop, "opening_source" => self.race_light.opening_source,
             "front_wheel_to_beam_m" => self.race_light.front_wheel_gap_m, "beam_crossed_at" => self.race_light.beam_at,
             "position_reference" => self.race_light.position_diagnostics(), "measured_right_tip_m"=>self.race_light.raw_tip,
@@ -1123,7 +1143,7 @@ impl Maneuver {
             ((r*dsin(i)).abs()<=SIDE_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M).then_some(-r*dcos(i)-REAR_BODY_EXTENT_M)
         }).reduce(f64::min)?;
         Some(crate::race_light::trim::Fix{at:scan.get("received_at").of()?,wall:crate::race_light::observed_end_wall(scan,h)?,
-            mapped:self.field_map.gantry_ahead(scan)?,front:FRONT_BODY_EXTENT_M*c+w,rear:REAR_BODY_EXTENT_M*c+w,rear_free})
+            mapped:self.field_map.finish_divider_ahead(scan)?,front:FRONT_BODY_EXTENT_M*c+w,rear:REAR_BODY_EXTENT_M*c+w,rear_free})
     }
 
     pub(crate) fn trim_ack_expected(&self)->bool { self.race_program && self.race_light.trim.late_ack(self.last_now) && self.light_motor_stage() }
@@ -1138,7 +1158,7 @@ impl Maneuver {
         self.light_stop_state = Some("waiting");
         if self.race_program && !self.race_light.trim.before_stop && self.race_light.trim.brake_acked && self.race_light_brake.is_used() && control.get("command_acked").is_true()
             && control.get("motor").oi()==Some(NEUTRAL) && let (Some(f),Some(plane))=(self.trim_fix(scan),stop.get("front_range_m").of()) {
-            if matches!(self.race_light.opening_source,Some("measured_right_board_opening"|"carried_right_board_opening"|"registered_station_opening")) {self.race_light.trim.arm_tip(f,plane,false)}
+            if matches!(self.race_light.opening_source,Some("measured_right_board_opening"|"carried_right_board_opening"|"registered_station_opening"|"housing_from_mapped_divider"|"housing_from_divider_tip"|"housing_from_end_board"|"measured_housing")) {self.race_light.trim.arm_tip(f,plane,false)}
             else {self.race_light.trim.arm(f,plane)}
         }
         self._light_wait_since = Some(now);

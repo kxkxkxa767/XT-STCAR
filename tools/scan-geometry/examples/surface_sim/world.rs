@@ -19,6 +19,7 @@ pub struct World {
     pub light_y: f64,
     pub post_ys: (f64, f64),
     pub segments: Vec<Segment>,
+    board_count: usize,
     pub cones: Vec<(f64, f64, f64)>,
 }
 
@@ -92,6 +93,7 @@ impl World {
             beam_x: gantry_x - number(config, "beam_gap_m", 1.),
             light_y: width - light_width / 2.,
             post_ys,
+            board_count: 0,
             segments: vec![
                 ((0., 0.), (length, 0.)),
                 ((length, 0.), (length, width)),
@@ -118,12 +120,17 @@ impl World {
             width - light_width - 0.01,
             width - light_width + 0.01,
         );
+        world.board_count = world.segments.len();
+        // A passive metal stand may remain at the nominal opening while the
+        // active black housing and beam have moved. Geometry is simulator-only.
+        let metal_frame = number(config,"reflector_gantry_x_m",world.gantry_x);
+        let metal_beam = number(config,"reflector_beam_x_m",world.beam_x);
         for y in [post_ys.1, post_ys.0] {
-            world.board(gantry_x - 0.025, gantry_x + 0.025, y - 0.025, y + 0.025);
+            world.board(metal_frame - 0.025, metal_frame + 0.025, y - 0.025, y + 0.025);
             if config["beam_posts"].as_bool().unwrap_or(true) {
                 world.board(
-                    world.beam_x - 0.015,
-                    world.beam_x + 0.015,
+                    metal_beam - 0.015,
+                    metal_beam + 0.015,
                     y - 0.015,
                     y + 0.015,
                 );
@@ -147,9 +154,14 @@ impl World {
     }
 
     pub fn cast(&self, pose: Pose, angle: f64) -> Option<f64> {
+        self.cast_lidar(pose, angle, true)
+    }
+
+    pub fn cast_lidar(&self, pose: Pose, angle: f64, reflective_posts: bool) -> Option<f64> {
+        let segments = if reflective_posts { &self.segments[..] } else { &self.segments[..self.board_count] };
         let (dx, dy) = (angle.cos(), angle.sin());
         let mut best = f64::INFINITY;
-        for &((x1, y1), (x2, y2)) in &self.segments {
+        for &((x1, y1), (x2, y2)) in segments {
             let (ex, ey) = (x2 - x1, y2 - y1);
             let den = dx * ey - dy * ex;
             if den.abs() < 1e-12 {
@@ -219,6 +231,16 @@ impl World {
             pose.x + front + HALF_WIDTH * s,
             pose.x - rear - HALF_WIDTH * s,
         )
+    }
+
+    /// Simulator truth, measured from the first front tyre within the physical beam segment.
+    pub fn front_wheel_gap(&self, pose: Pose) -> Option<f64> {
+        let (s,c)=pose.yaw.sin_cos();
+        [-HALF_WIDTH, HALF_WIDTH].into_iter().filter_map(|side| {
+            let y = pose.y + 0.19 * s + side * c;
+            (self.post_ys.0..=self.post_ys.1).contains(&y)
+                .then_some(self.beam_x - (pose.x + 0.19*c - side*s))
+        }).min_by(f64::total_cmp)
     }
 
     pub fn intersects_beam(&self, pose: Pose) -> bool {

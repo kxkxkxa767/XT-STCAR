@@ -30,7 +30,7 @@ pub const OUTDOOR_RAIL_H_M: f64 = 0.043;
 
 pub const NUM_COLS: usize = 64;
 pub const MAX_VERT_EDGES: usize = 16;
-pub const MAX_CONES: usize = 4;
+pub const MAX_CONES: usize = 6;
 
 const LUT_W: usize = 65;
 const LUT_H: usize = 49;
@@ -132,13 +132,24 @@ pub struct VertEdgeObs {
     pub weight: f32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ConeKind {
+    #[default]
+    RedOrange,
+    Blue,
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ConeObs {
+    pub kind: ConeKind,
     pub u: f32,
+    pub v_top: f32,
     pub v_bot: f32,
     pub xn: f32,
     pub yn: f32,
     pub width_px: f32,
+    pub height_px: f32,
+    pub confidence: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -242,11 +253,13 @@ fn estimate_wb_baseline(bgr: &[u8], w: usize, h: usize) -> (i32, i32) {
 }
 
 #[inline(always)]
-fn is_red_cone(b: u8, g: u8, r: u8) -> bool {
+fn is_red_cone_wb(b: u8, g: u8, r: u8, cb_bg: i32) -> bool {
     let (bi, gi, ri) = (b as i32, g as i32, r as i32);
     let sum = bi + gi + ri + 32;
     let cr = ((2 * ri - gi - bi) << 8) / sum;
-    cr >= 48 && ri >= gi + 28 && ri >= bi + 38 && ri >= 60
+    // Compensate warm/cool white-balance shift on redness.
+    let cr_rel = cr + (cb_bg / 2);
+    cr_rel >= 46 && ri >= gi + 20 && ri >= bi + 34 && ri >= 52
 }
 
 #[inline(always)]
@@ -433,24 +446,28 @@ pub fn extract_visual_frame(
         };
     }
 
-    // Edge-preserving 3-column spike rejection (removes isolated 1-column glitches).
+    // Edge-preserving 3-column spike rejection (removes isolated 1-column floor/glare glitches
+    // while preserving simultaneous top+bottom foreground blue-cone protrusions).
     let raw_v: [f32; NUM_COLS] = std::array::from_fn(|i| out.cols[i].v_bot);
+    let raw_vt: [f32; NUM_COLS] = std::array::from_fn(|i| out.cols[i].v_top);
     let raw_ok: [bool; NUM_COLS] = std::array::from_fn(|i| out.cols[i].valid);
-    let mut valid_cols = 0u8;
     for k in 0..NUM_COLS {
         if !raw_ok[k] {
             continue;
         }
         if k > 0 && k + 1 < NUM_COLS && raw_ok[k - 1] && raw_ok[k + 1] {
             let avg = 0.5 * (raw_v[k - 1] + raw_v[k + 1]);
-            if (raw_v[k - 1] - raw_v[k + 1]).abs() < 12.0 && (raw_v[k] - avg).abs() > 14.0 {
+            let avg_vt = 0.5 * (raw_vt[k - 1] + raw_vt[k + 1]);
+            let cone_bulge = raw_v[k] > avg + 5.0 && raw_vt[k] < avg_vt - 5.0;
+            if !cone_bulge
+                && (raw_v[k - 1] - raw_v[k + 1]).abs() < 12.0
+                && (raw_v[k] - avg).abs() > 14.0
+            {
                 out.cols[k].valid = false;
                 continue;
             }
         }
-        valid_cols += 1;
     }
-    out.valid_cols = valid_cols;
     out.rail_fraction = if rail_eligible >= 4 {
         rail_votes as f32 / rail_eligible as f32
     } else {
@@ -462,11 +479,257 @@ pub fn extract_visual_frame(
         0.0
     };
 
-    // Pitch-invariant vertical depth-step & corner edges from wall-bottom profile.
+    // 1. Red/orange cone detector (cone 1): vertical run straddling horizon band,
+    //    rejecting flat red court floors (too wide/low) and red canopies/banners above the wall.
+    let mut cone_mask = [false; NUM_COLS];
+    let mut cone_cnt = [0u16; NUM_COLS];
+    let mut cone_vtop = [0u16; NUM_COLS];
+    let mut cone_vbot = [0u16; NUM_COLS];
+    let v_red_lo = (140.0 * sy) as usize;
+    let v_red_hi = ((470.0 * sy) as usize).min(h - 1);
+    for k in 0..NUM_COLS {
+        let u = (((8 + k * 10) as f64 * sx) as usize).min(w - 1);
+        let mut best_len = 0usize;
+        let mut best_t = 0usize;
+        let mut best_b = 0usize;
+        let mut in_r = false;
+        let mut rt = 0usize;
+        let mut rb = 0usize;
+        let mut rcnt = 0usize;
+        let mut rgap = 0usize;
+        let mut v = v_red_lo;
+        while v <= v_red_hi {
+            let (b, g, r) = sample_bgr(bgr, w, u, v);
+            if is_red_cone_wb(b, g, r, cb_bg) {
+                if !in_r {
+                    in_r = true;
+                    rt = v;
+                    rcnt = 0;
+                }
+                rb = v;
+                rcnt += 1;
+                rgap = 0;
+            } else if in_r {
+                rgap += 2;
+                if rgap > 6 {
+                    // Must reach at/below horizon (rejects overhead tents/lights) and extend
+                    // up to/near horizon (rejects flat red floor well below the board base).
+                    if rb >= v_horiz_lo && rt <= v_horiz_hi + (38.0 * sy) as usize && rcnt >= 5 && rb - rt > best_len {
+                        best_len = rb - rt;
+                        best_t = rt;
+                        best_b = rb;
+                    }
+                    in_r = false;
+                    rgap = 0;
+                }
+            }
+            v += 2;
+        }
+        if in_r && rb >= v_horiz_lo && rt <= v_horiz_hi + (38.0 * sy) as usize && rcnt >= 5 && rb - rt > best_len {
+            best_len = rb - rt;
+            best_t = rt;
+            best_b = rb;
+        }
+        if best_len >= (12.0 * sy) as usize {
+            cone_cnt[k] = best_len as u16;
+            cone_vtop[k] = best_t as u16;
+            cone_vbot[k] = best_b as u16;
+        }
+    }
+    let mut n_cones = 0usize;
+    let mut k = 0usize;
+    while k < NUM_COLS && n_cones < MAX_CONES {
+        if cone_cnt[k] == 0 {
+            k += 1;
+            continue;
+        }
+        let start = k;
+        let mut wsum = 0.0;
+        let mut usum = 0.0;
+        let mut vt_min = u16::MAX;
+        let mut vb_max = 0u16;
+        while k < NUM_COLS && cone_cnt[k] > 0 {
+            let wt = cone_cnt[k] as f64;
+            wsum += wt;
+            usum += wt * (8 + k * 10) as f64;
+            vt_min = vt_min.min(cone_vtop[k]);
+            vb_max = vb_max.max(cone_vbot[k]);
+            k += 1;
+        }
+        let cols_span = k - start;
+        let width_px = (cols_span * 10) as f64;
+        let vt640 = vt_min as f64 / sy;
+        let vb640 = vb_max as f64 / sy;
+        let height_px = (vb640 - vt640).max(0.0);
+        // Reject wide horizontal red floor patches and tiny speckles.
+        if (1..=16).contains(&cols_span)
+            && height_px >= 14.0
+            && height_px >= 0.70 * width_px
+            && vb640 >= 286.0
+        {
+            cone_mask[start..k].fill(true);
+            for col in &mut out.cols[start..k] {
+                col.valid = false;
+            }
+            let u_c = usum / wsum;
+            let (xn, yn) = undistort_pixel(u_c, vb640);
+            let conf = ((height_px / 40.0).clamp(0.4, 1.0)
+                * (1.0 - (cols_span as f64 - 4.0).abs() / 18.0).clamp(0.4, 1.0)) as f32;
+            out.cones[n_cones] = ConeObs {
+                kind: ConeKind::RedOrange,
+                u: u_c as f32,
+                v_top: vt640 as f32,
+                v_bot: vb640 as f32,
+                xn: xn as f32,
+                yn: yn as f32,
+                width_px: width_px as f32,
+                height_px: height_px as f32,
+                confidence: conf,
+            };
+            n_cones += 1;
+        }
+    }
+
+    // 2. Blue cone detector (cone 2, or indoor blue cone): localized narrow foreground bulge
+    //    protruding both above and below the flanking background blue wall profile (or isolated
+    //    narrow vertical blue silhouette). Rejects continuous walls and monotonic divider ends.
+    let mut bk = 1usize;
+    while bk + 1 < NUM_COLS && n_cones < MAX_CONES {
+        if !out.cols[bk].valid {
+            bk += 1;
+            continue;
+        }
+        let left_s = if out.cols[bk - 1].valid {
+            Some(bk - 1)
+        } else if bk >= 2 && out.cols[bk - 2].valid {
+            Some(bk - 2)
+        } else {
+            None
+        };
+        let mut best_span: Option<(usize, usize, f32, f32, f32)> = None;
+        for span in 1..=13usize {
+            let end = bk + span - 1;
+            if end + 1 >= NUM_COLS {
+                break;
+            }
+            if !(bk..=end).all(|c| out.cols[c].valid) {
+                break;
+            }
+            let right_s = if out.cols[end + 1].valid {
+                Some(end + 1)
+            } else if end + 2 < NUM_COLS && out.cols[end + 2].valid {
+                Some(end + 2)
+            } else {
+                None
+            };
+            let mut vb_peak = 0.0f32;
+            let mut vt_peak = 999.0f32;
+            for c in bk..=end {
+                vb_peak = vb_peak.max(out.cols[c].v_bot);
+                vt_peak = vt_peak.min(out.cols[c].v_top);
+            }
+            let h_px = (vb_peak - vt_peak).max(0.0);
+            let w_px = (span * 10) as f32;
+            if h_px < 18.0 || h_px < 0.80 * w_px || vb_peak < 292.0 {
+                continue;
+            }
+            let (protrudes, score, u_c) = match (left_s, right_s) {
+                (Some(ls), Some(rs)) => {
+                    let l_vb = out.cols[ls].v_bot;
+                    let r_vb = out.cols[rs].v_bot;
+                    let l_vt = out.cols[ls].v_top;
+                    let r_vt = out.cols[rs].v_top;
+                    // Reject monotonic divider steps where one side is much closer than the other.
+                    if (l_vb - r_vb).abs() > 30.0 {
+                        (false, 0.0, 0.0)
+                    } else {
+                        let bg_vb = 0.5 * (l_vb + r_vb);
+                        let bg_vt = 0.5 * (l_vt + r_vt);
+                        let bot_drop = vb_peak - bg_vb;
+                        let top_rise = bg_vt - vt_peak;
+                        let ok = bot_drop >= 5.0
+                            && (top_rise >= 4.0 || vt_peak <= 30.0)
+                            && (bot_drop + top_rise.max(0.0)) >= 10.5
+                            && (vb_peak - l_vb) >= 4.0
+                            && (vb_peak - r_vb) >= 4.0
+                            && (out.cols[bk].v_bot >= bg_vb + 2.5 || span == 1)
+                            && (out.cols[end].v_bot >= bg_vb + 2.5 || span == 1);
+                        let mut u_acc = 0.0f32;
+                        let mut w_acc = 0.0f32;
+                        for c in bk..=end {
+                            let wt = (out.cols[c].v_bot - bg_vb).max(0.5)
+                                + (bg_vt - out.cols[c].v_top).max(0.0);
+                            u_acc += out.cols[c].u * wt;
+                            w_acc += wt;
+                        }
+                        (ok, bot_drop + top_rise, u_acc / w_acc.max(1.0))
+                    }
+                }
+                (None, None) => {
+                    // Completely isolated narrow blue cone against non-blue background.
+                    let ok = span <= 10 && h_px >= 1.05 * w_px && vt_peak <= 305.0;
+                    let mut u_acc = 0.0f32;
+                    let mut w_acc = 0.0f32;
+                    for c in bk..=end {
+                        let wt = (out.cols[c].v_bot - out.cols[c].v_top).max(1.0);
+                        u_acc += out.cols[c].u * wt;
+                        w_acc += wt;
+                    }
+                    (ok, h_px * 0.25, u_acc / w_acc.max(1.0))
+                }
+                _ => (false, 0.0, 0.0), // One-sided edge is a divider wall tip, never a cone.
+            };
+            if protrudes && best_span.is_none_or(|b| score > b.4) {
+                best_span = Some((bk, end, u_c, vt_peak, score));
+            }
+        }
+        if let Some((s_i, e_i, u_c, vt_p, score)) = best_span {
+            let mut vb_p = 0.0f32;
+            cone_mask[s_i..=e_i].fill(true);
+            for col in &mut out.cols[s_i..=e_i] {
+                vb_p = vb_p.max(col.v_bot);
+                col.valid = false;
+            }
+            let w_px = ((e_i - s_i + 1) * 10) as f32;
+            let h_px = (vb_p - vt_p).max(1.0);
+            let (xn, yn) = undistort_pixel(u_c as f64, vb_p as f64);
+            let conf = (score / 32.0).clamp(0.45, 1.0);
+            out.cones[n_cones] = ConeObs {
+                kind: ConeKind::Blue,
+                u: u_c,
+                v_top: vt_p,
+                v_bot: vb_p,
+                xn: xn as f32,
+                yn: yn as f32,
+                width_px: w_px,
+                height_px: h_px,
+                confidence: conf,
+            };
+            n_cones += 1;
+            bk = e_i + 2;
+        } else {
+            bk += 1;
+        }
+    }
+
+    // Recompute clean wall valid columns after excluding all foreground cone columns.
+    let mut wall_valid = 0u8;
+    for k in 0..NUM_COLS {
+        if out.cols[k].valid {
+            wall_valid += 1;
+        }
+    }
+    out.valid_cols = wall_valid;
+
+    // Pitch-invariant vertical depth-step & corner edges from clean background wall profile only.
+    // Skip any transition adjacent to a masked foreground cone so movable cones never pollute pose.
     let mut n_edges = 0usize;
     for k in 0..(NUM_COLS - 1) {
         if n_edges >= MAX_VERT_EDGES {
             break;
+        }
+        if cone_mask[k] || cone_mask[k + 1] {
+            continue;
         }
         let a = out.cols[k];
         let b = out.cols[k + 1];
@@ -480,7 +743,15 @@ pub fn extract_visual_frame(
                 weight: 1.0,
             };
             n_edges += 1;
-        } else if k >= 2 && k + 2 < NUM_COLS && out.cols[k - 2].valid && a.valid && b.valid && out.cols[k + 2].valid {
+        } else if k >= 2
+            && k + 2 < NUM_COLS
+            && !cone_mask[k - 2]
+            && !cone_mask[k + 2]
+            && out.cols[k - 2].valid
+            && a.valid
+            && b.valid
+            && out.cols[k + 2].valid
+        {
             let s_left = (a.v_bot - out.cols[k - 2].v_bot) / 20.0;
             let s_right = (out.cols[k + 2].v_bot - b.v_bot) / 20.0;
             if s_left * s_right < -0.02 && (s_left - s_right).abs() >= 0.25 {
@@ -497,63 +768,6 @@ pub fn extract_visual_frame(
         }
     }
     out.n_vert_edges = n_edges as u8;
-
-    // Coarse red/orange cone detector below horizon (pitch-invariant bearing landmark).
-    let mut cone_col = [0u16; NUM_COLS];
-    let mut cone_vbot = [0u16; NUM_COLS];
-    let v_cone_lo = (210.0 * sy) as usize;
-    let v_cone_hi = ((470.0 * sy) as usize).min(h - 1);
-    for k in 0..NUM_COLS {
-        let u = (((8 + k * 10) as f64 * sx) as usize).min(w - 1);
-        let mut cnt = 0u16;
-        let mut vmax = 0u16;
-        let mut v = v_cone_lo;
-        while v <= v_cone_hi {
-            let (b, g, r) = sample_bgr(bgr, w, u, v);
-            if is_red_cone(b, g, r) {
-                cnt += 1;
-                vmax = v as u16;
-            }
-            v += 3;
-        }
-        if cnt >= 4 {
-            cone_col[k] = cnt;
-            cone_vbot[k] = vmax;
-        }
-    }
-    let mut n_cones = 0usize;
-    let mut k = 0usize;
-    while k < NUM_COLS && n_cones < MAX_CONES {
-        if cone_col[k] == 0 {
-            k += 1;
-            continue;
-        }
-        let start = k;
-        let mut wsum = 0.0;
-        let mut usum = 0.0;
-        let mut vmax = 0u16;
-        while k < NUM_COLS && cone_col[k] > 0 {
-            let wt = cone_col[k] as f64;
-            wsum += wt;
-            usum += wt * (8 + k * 10) as f64;
-            vmax = vmax.max(cone_vbot[k]);
-            k += 1;
-        }
-        let cols_span = k - start;
-        if (1..=14).contains(&cols_span) {
-            let u_c = usum / wsum;
-            let v_c = vmax as f64 / sy;
-            let (xn, yn) = undistort_pixel(u_c, v_c);
-            out.cones[n_cones] = ConeObs {
-                u: u_c as f32,
-                v_bot: v_c as f32,
-                xn: xn as f32,
-                yn: yn as f32,
-                width_px: (cols_span * 10) as f32,
-            };
-            n_cones += 1;
-        }
-    }
     out.n_cones = n_cones as u8;
     out.compute_us = t0.elapsed().as_micros().min(u32::MAX as u128) as u32;
     out
@@ -606,5 +820,84 @@ mod tests {
                 / vis.valid_cols as f64;
             assert!((mean_v - 345.0).abs() <= 2.0, "mean_v={mean_v}");
         }
+    }
+
+    #[test]
+    fn red_and_blue_cone_detection_rejects_floor_canopy_wall_and_divider_step() {
+        let mut img = vec![0u8; IMG_W * IMG_H * 3];
+        // Sky/upper gray, blue background wall v in 260..=308, neutral court floor v > 308.
+        for v in 0..IMG_H {
+            let px = if v < 260 {
+                [210u8, 210, 210]
+            } else if v <= 308 {
+                [195u8, 105, 38] // blue wall
+            } else {
+                [135u8, 140, 138] // neutral floor
+            };
+            for u in 0..IMG_W {
+                let i = (v * IMG_W + u) * 3;
+                img[i..i + 3].copy_from_slice(&px);
+            }
+        }
+        // Overhead red tent canopy above wall (must be REJECTED).
+        for v in 80..155 {
+            for u in 40..140 {
+                let i = (v * IMG_W + u) * 3;
+                img[i..i + 3].copy_from_slice(&[25, 45, 220]);
+            }
+        }
+        // Wide flat red court strip on floor well below horizon (must be REJECTED).
+        for v in 390..450 {
+            for u in 20..280 {
+                let i = (v * IMG_W + u) * 3;
+                img[i..i + 3].copy_from_slice(&[35, 50, 195]);
+            }
+        }
+        // Monotonic divider wall step on the right (u >= 500 closer wall: v in 220..=350) (must be REJECTED).
+        for v in 220..=350 {
+            for u in 500..IMG_W {
+                let i = (v * IMG_W + u) * 3;
+                img[i..i + 3].copy_from_slice(&[200, 110, 40]);
+            }
+        }
+        // Real orange-red cone 0 centered at u=220, v in 248..=326 (~30 px wide, 78 px tall).
+        for v in 248..=326 {
+            let frac = (v - 248) as f64 / 78.0;
+            let half_w = (4.0 + 13.0 * frac) as usize;
+            for u in (220 - half_w)..=(220 + half_w) {
+                let i = (v * IMG_W + u) * 3;
+                img[i..i + 3].copy_from_slice(&[30, 82, 232]);
+            }
+        }
+        // Real foreground blue cone 1 centered at u=380, protruding above & below background wall (v in 236..=324).
+        for v in 236..=324 {
+            let frac = (v - 236) as f64 / 88.0;
+            let half_w = (4.0 + 14.0 * frac) as usize;
+            for u in (380 - half_w)..=(380 + half_w) {
+                let i = (v * IMG_W + u) * 3;
+                img[i..i + 3].copy_from_slice(&[215, 115, 32]);
+            }
+        }
+
+        let vis = extract_visual_frame(&img, IMG_W, IMG_H, 1, 1.0);
+        let reds: Vec<_> = vis.cones[..vis.n_cones as usize]
+            .iter()
+            .filter(|c| c.kind == ConeKind::RedOrange)
+            .collect();
+        let blues: Vec<_> = vis.cones[..vis.n_cones as usize]
+            .iter()
+            .filter(|c| c.kind == ConeKind::Blue)
+            .collect();
+        assert_eq!(reds.len(), 1, "expected exactly 1 red cone, got {:?}", reds);
+        assert!((reds[0].u - 220.0).abs() <= 12.0, "red u={}", reds[0].u);
+        assert!((reds[0].v_bot - 326.0).abs() <= 4.0, "red v_bot={}", reds[0].v_bot);
+
+        assert_eq!(blues.len(), 1, "expected exactly 1 blue cone, got {:?}", blues);
+        assert!((blues[0].u - 380.0).abs() <= 12.0, "blue u={}", blues[0].u);
+        assert!((blues[0].v_bot - 324.0).abs() <= 4.0, "blue v_bot={}", blues[0].v_bot);
+
+        // Foreground cone columns must be masked out of background wall columns.
+        assert!(!vis.cols[21].valid, "red cone center col should be masked");
+        assert!(!vis.cols[37].valid, "blue cone center col should be masked");
     }
 }

@@ -15,6 +15,7 @@ pub(crate) struct Observation {
     pub captured_mono_s: f64,
     pub lights: Lights,
     pub housing_lip: Option<f64>,
+    pub housing_edges: Option<crate::race_lamp_range::Edges>,
     pub compute_ms: f64,
     pub pinned_cpu: Option<usize>,
 }
@@ -118,6 +119,7 @@ pub(crate) fn spawn(
                         captured_mono_s,
                         lights,
                         housing_lip: crate::traffic_lamp::housing_lip(pixels, w, h),
+                        housing_edges: detector.backplate(pixels, w, h),
                         pinned_cpu,
                         compute_ms: start.elapsed().as_secs_f64() * 1000.,
                     };

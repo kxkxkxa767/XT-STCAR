@@ -46,3 +46,106 @@ pub fn lip(bgr: &[u8], w: usize, h: usize) -> Option<f64> {
     }
     best.map(|(_,y)|y as f64/h as f64)
 }
+
+use crate::race_lamp_range::Edges;
+
+/// Fit the actual long edges between the lenses. Rows are transported back to
+/// the amber centre along the observed tilt before checking column agreement.
+pub(super) fn metric_edges(
+    frame: &super::Frame<'_>,
+    marker: (f64, f64),
+    spacing: (f64, f64),
+    diameter: f64,
+) -> Option<Edges> {
+    if diameter < 6.0 || spacing.0 <= 0.0 {
+        return None;
+    }
+    let (cx, cy) = marker;
+    let sample = (diameter / 14.0).round().clamp(1.0, 5.0) as i32;
+    let luma = |x: usize, y: i32| {
+        let (b, g, r) = frame.pixel(x, y as usize);
+        (i32::from(r) * 2 + i32::from(g) * 4 + i32::from(b)) / 7
+    };
+    let fit = |sign: i32| {
+        let mut edges = [(0.0, 0.0); 6];
+        let mut n = 0;
+        for f in [-0.67, -0.51, -0.36, 0.36, 0.51, 0.67] {
+            let ux = (cx + f * spacing.0).round() as i32;
+            if ux < 1 || ux >= frame.width as i32 - 1 {
+                continue;
+            }
+            let mid = cy + f * spacing.1;
+            let x = ux as usize;
+            let mut best = None;
+            for k in (0.53 * diameter).ceil() as i32..=(1.70 * diameter).ceil() as i32 {
+                let y = mid.round() as i32 + sign * k;
+                if y < 2 * sample + 1 || y >= frame.height as i32 - 2 * sample - 1 {
+                    continue;
+                }
+                let inside = (luma(x, y - sign * sample) + luma(x, y - sign * 2 * sample)) / 2;
+                let outside = (luma(x, y + sign * sample) + luma(x, y + sign * 2 * sample)) / 2;
+                let contrast = outside - inside;
+                if inside < 130 && contrast >= 15 && best.is_none_or(|(s, _)| contrast > s) {
+                    best = Some((contrast, y));
+                }
+                // The silver crossbar often has a second, sharper border against
+                // the sky. Stop at the first sustained transition out of the black case.
+                if inside < 110
+                    && outside >= 145
+                    && contrast > 48
+                    && y + sign * 3 * sample > 0
+                    && y + sign * 3 * sample < frame.height as i32
+                    && luma(x, y + sign * 3 * sample) > 135
+                {
+                    break;
+                }
+            }
+            if let Some((_, y)) = best {
+                edges[n] = (f, y as f64);
+                n += 1;
+            }
+        }
+        if n < 4 {
+            return None;
+        }
+        // The illuminated parts of the lenses need not share a centre line.
+        // Fit the tilt of the measured black edge itself.
+        let mut slopes = [0.0; 15];
+        let mut ns = 0;
+        for i in 0..n {
+            for &(x, y) in &edges[..i] {
+                let dx = edges[i].0 - x;
+                if dx > 0.30 {
+                    slopes[ns] = (edges[i].1 - y) / dx;
+                    ns += 1;
+                }
+            }
+        }
+        if ns == 0 {
+            return None;
+        }
+        slopes[..ns].sort_unstable_by(f64::total_cmp);
+        let tilt = slopes[ns / 2];
+        if tilt.abs() > 0.45 * spacing.0 {
+            return None;
+        }
+        let mut ys = [0.0; 6];
+        for (i, &(x, y)) in edges[..n].iter().enumerate() {
+            ys[i] = y - tilt * x;
+        }
+        ys[..n].sort_unstable_by(f64::total_cmp);
+        let middle = (ys[(n - 1) / 2] + ys[n / 2]) * 0.5;
+        let agree = ys[..n]
+            .iter()
+            .filter(|&&v| (v - middle).abs() <= 2.0 + 0.10 * diameter)
+            .count();
+        (agree >= 4).then_some(middle * 480.0 / frame.height as f64)
+    };
+    let top = fit(-1);
+    let bottom = fit(1);
+    (top.is_some() || bottom.is_some()).then_some(Edges {
+        u: cx * 640.0 / frame.width as f64,
+        top,
+        bottom,
+    })
+}

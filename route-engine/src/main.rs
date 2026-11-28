@@ -39,6 +39,7 @@ mod race_ros2;
 mod race_hardware;
 mod race_imu;
 mod race_light;
+mod race_lamp_range;
 mod race_light_brake;
 mod race_speed_kalman;
 mod race_first_cone;

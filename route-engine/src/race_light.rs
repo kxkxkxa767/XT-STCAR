@@ -542,6 +542,7 @@ struct BeamSample {
 #[derive(Clone, Default, Debug)]
 pub struct RaceLight {
     pub trim: trim::Trim,
+    pub housing: crate::race_lamp_range::HousingTrack,
     tip_fix: Option<TipFix>,
     pub raw_tip: Option<f64>,
     pub entry_motion: EntryMotionSpeed,
@@ -582,6 +583,47 @@ pub struct RaceLight {
 }
 
 impl RaceLight {
+    pub fn register_housing(
+        &mut self,
+        map: &crate::race_field_map::Locator,
+        scan: &V,
+        heading: f64,
+    ) -> Option<crate::race_lamp_range::Plane> {
+        self.housing.direct = None;
+        let raw_edge = self
+            .tip_fix
+            .filter(|f| f.confirmed && Some(f.at) == scan.get("received_at").of())
+            .map(|f| f.ahead);
+        let shot = self.housing.latest?;
+        let plane = map.housing_plane(scan, shot)?;
+        let mapped = map.finish_divider_ahead(scan);
+        if self.beam_at.is_none()
+            && self.housing.pending().is_some()
+            && (map.motion_supported(scan) || (plane.both && raw_edge.is_some()))
+        {
+            let end = (heading.abs() <= crate::maneuver::open_lane_entry_heading_rad()
+                && map.finish_ahead(scan).is_some())
+            .then(|| observed_end_wall(scan, heading))
+            .flatten();
+            self.housing.register(shot, plane, raw_edge, end);
+        }
+        // Measure the car-to-lamp distance again even after the front-wheel clock
+        // latches. This keeps the stop position relative to the fixture when the
+        // end wall is out of LiDAR range. The one-shot clock itself cannot move.
+        let allowance = (2.0 * plane.uncertainty).clamp(0.10, 0.22);
+        let agrees = [
+            self.housing.ahead(mapped, None, None),
+            self.housing.ahead(None, raw_edge, None),
+        ]
+        .into_iter()
+        .flatten()
+        .any(|(d, _)| (plane.ahead - d).abs() <= allowance);
+        if agrees && (plane.both || plane.uncertainty <= 0.12) {
+            self.housing.direct = scan.get("seq").oi().map(|seq| (seq, plane.ahead));
+        }
+        Some(plane)
+    }
+
     /// Anchor the surveyed plane to the actual edge this run. Only relative
     /// displacement is carried across a brief dropout. Missing scans don't refresh it.
     pub fn observe_lane_tip(&mut self,scan:&V,h:f64,lane:&V,map:Option<f64>,body:f64,yaw:f64,axis_v:Option<f64>)->Option<f64> {
@@ -607,8 +649,8 @@ impl RaceLight {
         Some(f.ahead + (map?-f.map?))
     }
 
-    /// The upstream end of the finish divider is the gantry plane. Pair a
-    /// visible tip with the end board so it can leave the laser's field of view.
+    /// The finish divider is a fixed reference. A directly identified gantry or
+    /// a camera-registered black backplate can occupy a different longitudinal plane.
     pub fn opening_ahead(
         &mut self,
         scan: &V,
@@ -637,7 +679,7 @@ impl RaceLight {
                 .map_or(offset,|b|0.5*(offset+b)));
         }
         self.direct_station = identified.map(|ahead| OpeningSample{at,ahead,speed:axis_speed});
-        if self.opening_rebased { self.previous_beam_gap=None; }
+        let station_rebased = self.opening_rebased;
         // During the entry turn, central rays can hit the near face of the
         // divider. Only subtract its length when looking down the actual lane.
         let along_lane = heading.abs() <= crate::maneuver::open_lane_entry_heading_rad();
@@ -698,6 +740,53 @@ impl RaceLight {
             self.opening_rebased |= !consistent(d);
             Some((d,source))
         }else{position};
+        let from_housing = self
+            .housing
+            .direct
+            .filter(|(n, _)| Some(*n) == seq)
+            .map(|(_, d)| (d, "measured_housing"))
+            .or_else(|| self.housing.ahead(mapped, edge, wall))
+            .or_else(|| match position {
+                Some((d, "visible_divider_opening" | "tracked_divider_opening")) => {
+                    self.housing.ahead(None, Some(d), None)
+                }
+                _ => None,
+            });
+        let position = if let Some(visual) = from_housing {
+            // An independently identified physical station is already in lamp coordinates.
+            // The camera offset only transfers divider/end-wall distances into that frame.
+            // A pair at the entrance can belong to a separate support. After the
+            // black frame has been registered, use post ranges only for the same plane.
+            let same_lamp = |d: f64| (d - visual.0).abs() <= LIGHT_GANTRY_EDGE_M;
+            let station = live.filter(|&d| sees_both_stations && same_lamp(d));
+            let (d, source) = if let Some(d) = station {
+                (d, "confirmed_gantry_stations")
+            } else if let Some((m, b)) = mapped
+                .zip(self.station_offset)
+                .filter(|(m, b)| visual.1 != "measured_housing" && same_lamp(m + b))
+            {
+                (m + b, "registered_station_opening")
+            } else {
+                visual
+            };
+            let revised = self.housing.changed_reference();
+            self.opening_rebased = !consistent(d)
+                || (revised
+                    && last.is_some_and(|s| {
+                        let projected =
+                            s.ahead - axis_speed.or(s.speed).unwrap_or(0.0) * (at - s.at);
+                        (d - projected).abs() > crate::helpers::OPEN_LINE_BAND_M
+                    }));
+            if self.opening_rebased {
+                self.previous_beam_gap = None;
+            }
+            Some((d, source))
+        } else {
+            if station_rebased {
+                self.previous_beam_gap = None;
+            }
+            position
+        };
         self.opening_source = position.map(|(_, source)| source);
         if let Some((ahead,_)) = position {self.opening_sample = Some(OpeningSample{at,ahead,speed:axis_speed});}
         position.map(|(ahead, _)| ahead)
@@ -1013,6 +1102,9 @@ impl RaceLight {
             "gap_from_first_cone_m" => voted(self.first_gap).map(|v| v.1),
             "gap_from_second_cone_m" => voted(self.second_gap).map(|v| v.1),
             "observed_at" => self.gap_position.map(|v| v.observed_at),
-            "source_seq" => self.second_seq, "ahead_m" => self.prior_ahead}
+            "source_seq" => self.second_seq, "ahead_m" => self.prior_ahead,
+            "housing_ahead_at_measurement_m"=>self.housing.last_range,
+            "housing_minus_divider_m"=>self.housing.registered.map(|r|r.offset),
+            "end_wall_minus_housing_m"=>self.housing.registered.and_then(|r|r.end_span)}
     }
 }

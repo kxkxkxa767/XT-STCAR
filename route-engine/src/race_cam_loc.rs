@@ -21,11 +21,11 @@ const CAM_YAW_MAX_RAD: f64 = 5.0 * std::f64::consts::PI / 180.0;
 /// Angular-coherence speckle filter for degraded/noisy LiDAR scans.
 /// Keeps clean R1 scans bit-for-bit untouched; removes isolated random noise in R3-R5
 /// while preserving short <= 0.5 m real board arcs and cones.
-pub(crate) fn filter_lidar_speckles(ranges: &[Option<f64>]) -> [Option<f64>; 360] {
+pub(crate) fn filter_lidar_speckles(ranges: &[Option<f64>]) -> ([Option<f64>; 360], bool) {
     let mut out = [None; 360];
     let n = ranges.len().min(360);
     if n == 0 {
-        return out;
+        return (out, false);
     }
     let mut raw_valid = 0usize;
     let mut kept = 0usize;
@@ -59,7 +59,10 @@ pub(crate) fn filter_lidar_speckles(ranges: &[Option<f64>]) -> [Option<f64>; 360
     if raw_valid >= 180 && kept * 100 >= raw_valid * 85 {
         out[..n].copy_from_slice(&ranges[..n]);
     }
-    out
+    // A short but continuous board arc also has low coverage. Only scattered
+    // returns call for temporal cone verification.
+    let isolated = raw_valid - kept;
+    (out, isolated >= 4 && 3 * isolated >= raw_valid)
 }
 
 #[derive(Clone, Debug)]
@@ -76,7 +79,6 @@ pub(crate) struct CamLocState {
     pub cal_updates: u64,
     pub last_inliers: usize,
     pub last_edge_inliers: usize,
-    pub last_cone_inliers: usize,
     pub last_pixel_rms: f64,
     pub last_solve_us: u32,
     pub last_cam_anchored: [bool; 2],
@@ -98,7 +100,6 @@ impl Default for CamLocState {
             cal_updates: 0,
             last_inliers: 0,
             last_edge_inliers: 0,
-            last_cone_inliers: 0,
             last_pixel_rms: 0.0,
             last_solve_us: 0,
             last_cam_anchored: [false; 2],
@@ -283,6 +284,97 @@ impl CamLocState {
             .is_some_and(|(obs, _)| self.last_fused_frame != Some(obs.frame))
     }
 
+    /// Project a detected camera cone onto the ground plane (`z = 0`) using the
+    /// motion-compensated camera pose at capture time, returning `(world_center, dist_from_lens, bearing_body_rad)`.
+    /// Rejects observations occluded by a closer field wall or inconsistent with physical cone size.
+    pub fn project_cone_to_world(
+        &self,
+        field: &Field,
+        pose: Pose2,
+        dt_cam: f64,
+        speed: f64,
+        yaw_rate: f64,
+        cn: &crate::race_cam_features::ConeObs,
+    ) -> Option<(xt_stcar_robot_core::autonomy::Point2, f64, f64)> {
+        let (cx, cy, theta, _, _) =
+            lens_at_cam_time(pose, self.cam_yaw_rad, dt_cam, speed, yaw_rate);
+        let pitch = self.pitch_rad;
+        let (sp, cp) = pitch.sin_cos();
+        let xn = cn.xn as f64;
+        let yn = cn.yn as f64;
+        // Upward-pitched camera ray in camera-aligned horizontal frame.
+        let fwd_r = cp + yn * sp;
+        let up_r = sp - yn * cp;
+        let left_r = -xn;
+        if fwd_r <= 0.15 || up_r >= -0.024 {
+            return None;
+        }
+        // Intersect ground contact ray at z = 0 (up = -CAM_HEIGHT_M).
+        let scale_g = -CAM_HEIGHT_M / up_r;
+        let fwd_g = scale_g * fwd_r;
+        let left_g = scale_g * left_r;
+        let horiz_dist = fwd_g.hypot(left_g);
+        if !(0.32..=6.20).contains(&horiz_dist) {
+            return None;
+        }
+        // Physical cone dimensions check (real cone: ~0.22 m base, ~0.48 m tall).
+        let est_w = horiz_dist * (cn.width_px as f64 / FX);
+        let est_h = horiz_dist * (cn.height_px as f64 / FY);
+        if !(0.06..=0.65).contains(&est_w) || !(0.16..=0.95).contains(&est_h) {
+            return None;
+        }
+        let (st, ct) = theta.sin_cos();
+        let ux = (ct * fwd_g - st * left_g) / horiz_dist;
+        let uy = (st * fwd_g + ct * left_g) / horiz_dist;
+        // Reject if a surveyed board blocks the line of sight before the projected cone.
+        if let Some((_, wall_d)) = field.hit(cx, cy, ux, uy)
+            && wall_d + 0.18 < horiz_dist
+        {
+            return None;
+        }
+        // Camera base edge sits on the near face of the ~0.10 m radius cone; shift toward center.
+        let center_d = horiz_dist + 0.09;
+        let world = xt_stcar_robot_core::autonomy::Point2 {
+            x_m: cx + ux * center_d,
+            y_m: cy + uy * center_d,
+        };
+        let body = pose.world_to_body(world);
+        let bearing = body.y_m.atan2(body.x_m);
+        Some((world, horiz_dist, bearing))
+    }
+
+    pub fn exposure_origin(&self, pose: Pose2, age: f64, speed: f64, yaw_rate: f64) -> xt_stcar_robot_core::autonomy::Point2 {
+        let (x_m, y_m, _, _, _) = lens_at_cam_time(pose, self.cam_yaw_rad, age, speed, yaw_rate);
+        xt_stcar_robot_core::autonomy::Point2 { x_m, y_m }
+    }
+
+    pub fn cone_silhouette_matches(&self, field: &Field, pose: Pose2, age: f64, speed: f64,
+        yaw_rate: f64, cn: &crate::race_cam_features::ConeObs, world: xt_stcar_robot_core::autonomy::Point2) -> bool {
+        let (cx, cy, theta, _, _) = lens_at_cam_time(pose, self.cam_yaw_rad, age, speed, yaw_rate);
+        let (dx, dy) = (world.x_m - cx, world.y_m - cy);
+        let distance = dx.hypot(dy);
+        if !(0.32..=6.2).contains(&distance)
+            || field.hit(cx, cy, dx / distance, dy / distance).is_some_and(|(_, wall)| wall + 0.18 < distance)
+        {
+            return false;
+        }
+        let Some((xn, yn)) = project_world_pt(world.x_m, world.y_m, 0.48, cx, cy, theta, self.pitch_rad)
+        else { return false };
+        let (top_x, top_y) = crate::race_cam_features::undistort_pixel(cn.u as f64, cn.v_top as f64);
+        (FX * (xn - top_x)).abs() <= (0.45 * f64::from(cn.width_px)).max(8.0)
+            && (FY * (yn - top_y)).abs() <= (0.25 * f64::from(cn.height_px)).clamp(12.0, 40.0)
+    }
+
+    pub fn latest_visual_obs(&self, at: f64) -> Option<(VisualFrame, f64)> {
+        let (obs, cam_at) = self.latest_obs.as_ref()?;
+        let age = at - *cam_at;
+        if (-0.12..=CAM_MAX_AGE_S).contains(&age) {
+            Some((*obs, age))
+        } else {
+            None
+        }
+    }
+
     /// Passively calibrate pitch, camera-to-LiDAR yaw offset, and rail height (0 vs 4.3 cm)
     /// when LiDAR has a strong clean fix. Never modifies the LiDAR pose.
     pub fn calibrate_from_lidar(
@@ -401,7 +493,6 @@ impl CamLocState {
         let mut lidar_err = 0.0;
         let mut cam_inliers = 0usize;
         let mut edge_inliers = 0usize;
-        let mut cone_inliers = 0usize;
         let mut cam_sq_sum = 0.0;
         let mut cam_info_xy = [0.0f64; 2];
         let mut cam_boards_xy = [0usize; 2];
@@ -590,6 +681,8 @@ impl CamLocState {
             }
 
             // 4. Pitch-invariant vertical edges (field corners & divider tips).
+            //    Movable cones are intentionally excluded from pose localization so
+            //    relocated cones can never pull body pose or bias themselves.
             edge_inliers = 0;
             for e in &obs.vert_edges[..obs.n_vert_edges as usize] {
                 if let Some((lm, r_u, _)) =
@@ -604,39 +697,6 @@ impl CamLocState {
                 }
             }
 
-            // 5. Surveyed red/orange cones (both horizontal bearing and ground-contact elevation).
-            cone_inliers = 0;
-            for cn in &obs.cones[..obs.n_cones as usize] {
-                let mut best: Option<(usize, f64)> = None;
-                for (ci, pt) in field.cones.iter().enumerate() {
-                    if let Some((xn_p, yn_p)) = project_world_pt(pt.x_m, pt.y_m, 0.0, cx, cy, theta, pitch) {
-                        let ru = FX * (xn_p - cn.xn as f64);
-                        let rv = FY * (yn_p - cn.yn as f64);
-                        let err = ru.hypot(rv);
-                        if ru.abs() < 42.0 && rv.abs() < 36.0 && best.is_none_or(|b| err < b.1) {
-                            best = Some((ci, err));
-                        }
-                    }
-                }
-                if let Some((ci, _)) = best {
-                    let pt = field.cones[ci];
-                    if let Some((xn_p, yn_p)) = project_world_pt(pt.x_m, pt.y_m, 0.0, cx, cy, theta, pitch) {
-                        let ru = FX * (xn_p - cn.xn as f64);
-                        let (ju, _) = point_xn_jacobian((pt.x_m, pt.y_m), cx, cy, theta, pitch, dcx_dyaw, dcy_dyaw);
-                        let wu = 2.0 * (8.0 / ru.abs().max(8.0)) / (10.0 * 10.0);
-                        add_normal_eq(&mut h, &mut g, ju, ru, wu);
-                        // Also vertical base contact for range.
-                        let rv = FY * (yn_p - cn.yn as f64);
-                        let jv = point_yn_jacobian_fd((pt.x_m, pt.y_m, 0.0), cx, cy, theta, pitch, dcx_dyaw, dcy_dyaw);
-                        let wv = 1.2 * (8.0 / rv.abs().max(8.0)) / (12.0 * 12.0);
-                        add_normal_eq(&mut h, &mut g, jv, rv, wv);
-                        cone_inliers += 1;
-                        cam_info_xy[0] += wu * ju[0] * ju[0] + wv * jv[0] * jv[0];
-                        cam_info_xy[1] += wu * ju[1] * ju[1] + wv * jv[1] * jv[1];
-                    }
-                }
-            }
-
             // Mirror upper triangle to lower triangle.
             for a in 0..4 {
                 for b in 0..a {
@@ -644,7 +704,7 @@ impl CamLocState {
                     h[a][b] = v;
                 }
             }
-            if cam_inliers == 0 && edge_inliers == 0 && cone_inliers == 0 && l_n == 0 {
+            if cam_inliers == 0 && edge_inliers == 0 && l_n == 0 {
                 break;
             }
             let Some(step) = solve_4x4(h, g) else { break };
@@ -679,10 +739,9 @@ impl CamLocState {
         self.frames_fused += 1;
         self.last_inliers = cam_inliers;
         self.last_edge_inliers = edge_inliers;
-        self.last_cone_inliers = cone_inliers;
         self.last_pixel_rms = pixel_rms;
         self.last_cam_anchored = cam_anchored;
-        self.last_used_cam = cam_inliers > 0 || edge_inliers > 0 || cone_inliers > 0;
+        self.last_used_cam = cam_inliers > 0 || edge_inliers > 0;
         self.last_solve_us = t0.elapsed().as_micros().min(u32::MAX as u128) as u32;
 
         let combined_err = if lidar_support[0] + lidar_support[1] > 0 {
@@ -825,47 +884,6 @@ fn point_xn_jacobian(
     )
 }
 
-fn point_yn_jacobian_fd(
-    lm: (f64, f64, f64),
-    cx: f64,
-    cy: f64,
-    theta: f64,
-    pitch: f64,
-    dcx_dyaw: f64,
-    dcy_dyaw: f64,
-) -> [f64; 4] {
-    let eps = 1e-4;
-    let base = project_world_pt(lm.0, lm.1, lm.2, cx, cy, theta, pitch)
-        .map(|t| t.1)
-        .unwrap_or(0.0);
-    let px = project_world_pt(lm.0, lm.1, lm.2, cx + eps, cy, theta, pitch)
-        .map(|t| t.1)
-        .unwrap_or(base);
-    let py = project_world_pt(lm.0, lm.1, lm.2, cx, cy + eps, theta, pitch)
-        .map(|t| t.1)
-        .unwrap_or(base);
-    let pt = project_world_pt(
-        lm.0,
-        lm.1,
-        lm.2,
-        cx + dcx_dyaw * eps,
-        cy + dcy_dyaw * eps,
-        theta + eps,
-        pitch,
-    )
-    .map(|t| t.1)
-    .unwrap_or(base);
-    let pp = project_world_pt(lm.0, lm.1, lm.2, cx, cy, theta, pitch + eps)
-        .map(|t| t.1)
-        .unwrap_or(base);
-    [
-        FY * (px - base) / eps,
-        FY * (py - base) / eps,
-        FY * (pt - base) / eps,
-        FY * (pp - base) / eps,
-    ]
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -892,17 +910,14 @@ mod tests {
                 ranges[i] = Some(r);
             }
         }
-        let filtered = filter_lidar_speckles(&ranges);
+        let (filtered, _) = filter_lidar_speckles(&ranges);
         let wall_kept = (80..115).filter(|&i| filtered[i].is_some()).count();
         let noise_kept = (0..360).filter(|&i| !(80..115).contains(&i) && filtered[i].is_some()).count();
         assert!(wall_kept >= 33, "short wall arc lost: {wall_kept}/35");
         assert!(noise_kept <= 8, "too much speckle survived: {noise_kept}");
     }
 
-    #[test]
-    fn blind_lidar_camera_converges_to_true_pose() {
-        let field = FIELD.as_ref().expect("field");
-        let true_pose = Pose2 { x_m: 1.85, y_m: 0.46, yaw_rad: 0.05 };
+    fn wall_frame(field: &Field, true_pose: Pose2) -> VisualFrame {
         let pitch = NOMINAL_PITCH_RAD;
         let theta = true_pose.yaw_rad + NOMINAL_CAM_YAW_RAD;
         let cx = true_pose.x_m + CAM_AHEAD_LIDAR_M * true_pose.yaw_rad.cos();
@@ -939,6 +954,14 @@ mod tests {
             };
             vis.n_vert_edges = 1;
         }
+        vis
+    }
+
+    #[test]
+    fn blind_lidar_camera_converges_to_true_pose() {
+        let field = FIELD.as_ref().expect("field");
+        let true_pose = Pose2 { x_m: 1.85, y_m: 0.46, yaw_rad: 0.05 };
+        let vis = wall_frame(field, true_pose);
         let mut st = CamLocState::default();
         st.observe_camera(vis, 1.0);
         let perturbed = Pose2 { x_m: 1.65, y_m: 0.34, yaw_rad: -0.02 };
@@ -948,6 +971,29 @@ mod tests {
         assert!((est.x_m - true_pose.x_m).abs() < 0.14, "x err: {}", est.x_m - true_pose.x_m);
         assert!((est.y_m - true_pose.y_m).abs() < 0.04, "y err: {}", est.y_m - true_pose.y_m);
         assert!((est.yaw_rad - true_pose.yaw_rad).abs() < 0.05, "yaw err: {}", est.yaw_rad - true_pose.yaw_rad);
+    }
+
+    #[test]
+    fn camera_velocity_remains_finite_across_long_scan_interval() {
+        use crate::motion_sensors::RaceInputs;
+        use crate::py::V;
+        use crate::race_field_map::Locator;
+
+        let pose = Pose2 { x_m: 1.85, y_m: 0.46, yaw_rad: 0.05 };
+        let walls = wall_frame(FIELD.as_ref().expect("field"), pose);
+        let mut locator = Locator::default();
+        locator.force_state_for_eval(1, 1.0, pose, 0.0, Some(0.0), Some(0.0));
+        let imu = RaceInputs { yaw_rate: Some(0.0), forward_integral: Some(0.0) };
+        let missing = V::list(vec![V::None; 360]);
+        for (seq, at) in [(2i64, 1.1), (3, 1.72)] {
+            let scan = crate::dict! { "seq" => seq, "received_at" => at, "ranges" => missing.clone() };
+            locator.observe_camera(VisualFrame { frame: seq, captured_mono_s: at, ..walls }, at);
+            locator.observe(&scan, at, imu, false);
+            assert!(locator.camera_localized(&scan));
+            assert_eq!(locator.cam_loc.last_cam_fix_at, Some(at));
+            let speed = locator.body_speed(&scan).expect("camera anchor");
+            assert!((0.0..=2.5).contains(&speed), "speed: {speed}");
+        }
     }
 
     #[test]
