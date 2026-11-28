@@ -24,8 +24,7 @@ serde = { version = "1", features = ["derive"], optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 rscam = { version = "=0.5.5", features = ["no_wrapper"] }
-zune-core = "=0.5.3"
-zune-jpeg = "=0.5.15"
+xt-stcar-camera-jpeg = { path = "camera-jpeg" }
 
 [features]
 default = []

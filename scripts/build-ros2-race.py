@@ -19,6 +19,8 @@ parser.add_argument('--interfaces', type=Path, required=True)
 parser.add_argument('--out', type=Path, required=True)
 parser.add_argument('--require-clean', action='store_true')
 parser.add_argument('--binary', type=Path, help='stage an already cross-built ROS2 executable after ELF validation')
+parser.add_argument('--jpeg-cpu', choices=('spacemit-x60', 'generic'), default='spacemit-x60',
+                    help='JPEG compilation target for a new build (default: the vehicle K1)')
 args = parser.parse_args()
 prefix, interfaces, out = args.ros_prefix.resolve(), args.interfaces.resolve(), args.out.resolve()
 if args.require_clean:
@@ -30,6 +32,21 @@ env = dict(os.environ, RUSTUP_TOOLCHAIN='1.97.1', ROS_DISTRO='humble',
     CARGO_ZIGBUILD_ZIG_PATH=str(ROOT/'toolchains/zig-aarch64-macos-0.15.2/zig'),
     CARGO_ZIGBUILD_CACHE_DIR=str(ROOT/'tmp/cargo-zigbuild-cache'), ZIG_GLOBAL_CACHE_DIR=str(ROOT/'tmp/zig-cache'),
     RUSTFLAGS='-C link-arg=-Wl,-rpath,/opt/ros/humble/lib:/opt/ros/humble/lib/riscv64-linux-gnu -C link-arg=-Wl,--disable-new-dtags -C link-arg=-Wl,--allow-shlib-undefined')
+if args.binary is None and args.jpeg_cpu == 'spacemit-x60':
+    wrapper = str(ROOT/'scripts/rustc-k1-jpeg.py')
+    if env.get('RUSTC_WRAPPER') and env['RUSTC_WRAPPER'] != wrapper:
+        env['XT_STCAR_INNER_RUSTC_WRAPPER'] = env['RUSTC_WRAPPER']
+    env['RUSTC_WRAPPER'] = wrapper
+    # ThinLTO emits the final module under the generic controller target.
+    # Link an empty object with the JPEG CPU's ELF attributes so the linker
+    # also advertises the ISA actually required by the decoder.
+    attributes = out/'k1-jpeg-isa.o'
+    subprocess.run(['rustc', '--target', 'riscv64gc-unknown-linux-gnu', '--crate-name', 'k1_jpeg_isa',
+                    '--crate-type', 'lib', '--emit=obj', '-C', 'target-cpu=spacemit-x60', '-o', str(attributes), '-'],
+                   cwd=ROOT, env=env, input=b'#![no_std]\n', check=True)
+    env['XT_STCAR_K1_JPEG_ARCH_OBJECT'] = str(attributes)
+    # Keep Cargo's cached generic and K1 artifacts distinct.
+    env['RUSTFLAGS'] += ' --cfg=xt_stcar_k1_jpeg_isa'
 if args.binary is None:
     subprocess.run([str(ROOT/'toolchains/cargo-zigbuild-0.23.4/cargo-zigbuild'), 'zigbuild',
         '--manifest-path', str(ROOT/'route-engine/Cargo.toml'), '--features', 'ros2', '--release', '--locked', '--offline',
@@ -62,11 +79,13 @@ manifest = {'source_commit': source, 'source_dirty': dirty, 'ros_distro': 'humbl
     'physical_trial_executed': False, 'nodes': ['xt_stcar_race', 'xt_stcar_chassis', 'xt_stcar_lidar'],
     'hardware_transport': 'ROS2 topics; separate driver processes retain native Guard and EOF lifeline',
     'binary': str(executable.relative_to(out)), 'ros_prefix_for_link': str(prefix), 'rust_interface_overlay': str(interfaces)}
+if args.binary is None:
+    manifest['jpeg_target_cpu'] = args.jpeg_cpu
 if not dirty:
     source_archive = package/'competition-source.tar.gz'
     source_paths = [
         'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'route-engine', 'crates', 'config',
-        'scripts/race-trial.py', 'scripts/build-ros2-race.py',
+        'scripts/race-trial.py', 'scripts/build-ros2-race.py', 'scripts/rustc-k1-jpeg.py',
         'scripts/ros2-generate-rust.py', 'scripts/package-ros2-round.py', 'scripts/inspect_elf.py',
         'ros2/xt_stcar_race']
     if (ROOT/'scripts/install-numbered-programs.py').is_file():

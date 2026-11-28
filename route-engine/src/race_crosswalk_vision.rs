@@ -11,6 +11,7 @@
 //!   so continuous 5 cm white basketball-court lines (horizontal, vertical, or curved) are
 //!   rejected with zero false positives.
 
+use std::os::unix::net::UnixDatagram;
 use std::path::{Path, PathBuf};
 #[cfg(target_os = "linux")]
 use std::process::{Command, Stdio};
@@ -530,25 +531,37 @@ pub fn detect_crosswalk(
         if row_valid < 28 {
             continue;
         }
+        // Keep the valid cells of [iy - 18, iy + 18] sorted as the window moves.
+        // Both quartiles use exactly the same row values as a fresh sort.
+        loc_y.clear();
+        loc_s.clear();
+        let mut left = 0usize;
+        let mut right = 0usize;
         for iy in 0..ny {
-            if !valid[base + iy] {
-                continue;
-            }
-            let lo = iy.saturating_sub(18);
-            let hi = (iy + 19).min(ny);
-            loc_y.clear();
-            loc_s.clear();
-            for j in lo..hi {
-                if valid[base + j] {
-                    loc_y.push(y_grid[base + j]);
-                    loc_s.push(s_grid[base + j]);
+            while left < iy.saturating_sub(18) {
+                let cell = base + left;
+                if valid[cell] {
+                    for (sorted, value) in [(&mut loc_y, y_grid[cell]), (&mut loc_s, s_grid[cell])] {
+                        let pos = sorted.partition_point(|v: &f32| v.total_cmp(&value).is_lt());
+                        debug_assert_eq!(sorted.get(pos), Some(&value));
+                        sorted.remove(pos);
+                    }
                 }
+                left += 1;
             }
-            if loc_y.len() < 12 {
+            while right < (iy + 19).min(ny) {
+                let cell = base + right;
+                if valid[cell] {
+                    for (sorted, value) in [(&mut loc_y, y_grid[cell]), (&mut loc_s, s_grid[cell])] {
+                        let pos = sorted.partition_point(|v: &f32| v.total_cmp(&value).is_lt());
+                        sorted.insert(pos, value);
+                    }
+                }
+                right += 1;
+            }
+            if !valid[base + iy] || loc_y.len() < 12 {
                 continue;
             }
-            loc_y.sort_by(|a, b| a.total_cmp(b));
-            loc_s.sort_by(|a, b| a.total_cmp(b));
             let bg_y = loc_y[loc_y.len() / 4];
             let bg_s = loc_s[(3 * loc_s.len()) / 4];
             let yv = y_grid[base + iy];
@@ -838,10 +851,21 @@ pub fn spawn_worker(
     tx: Sender<Event>,
 ) -> thread::JoinHandle<()> {
     spawn_named("rust-cw-vision", move || {
+        let mut timings = crate::race_frame_timing::FrameLog::open("crosswalk-timing.jsonl");
         let pinned = pin_current_thread(6);
         if let Ok(mut s) = stats.lock() {
             s.pinned_cpu = pinned;
         }
+        let interval = Duration::from_millis(15);
+        let socket_path = wake_socket_path(&shm_path);
+        let wake = UnixDatagram::bind(&socket_path).ok().and_then(|socket| {
+            if socket.set_read_timeout(Some(interval)).is_ok() {
+                Some(socket)
+            } else {
+                let _ = std::fs::remove_file(&socket_path);
+                None
+            }
+        });
         let started_at = Instant::now();
         let mut last_frame: i64 = -1;
         while !stop.load(Ordering::Acquire) {
@@ -849,7 +873,7 @@ pub fn spawn_worker(
             // Wait up to 0.8 s for the first lidar scan so initial stationary frames use
             // live left-gap pitch calibration instead of nominal 8.05 deg; never block past 0.8 s.
             if !h_snap.has_scan && started_at.elapsed() < Duration::from_millis(800) {
-                thread::sleep(Duration::from_millis(15));
+                thread::sleep(interval);
                 continue;
             }
             if let Ok(bytes) = std::fs::read(&shm_path)
@@ -857,7 +881,13 @@ pub fn spawn_worker(
                 && frame != last_frame
             {
                 last_frame = frame;
+                let start = timings.as_ref().map(|_| crate::race_frame_timing::monotonic_s());
                 let obs = detect_crosswalk(payload, w, h, &h_snap, frame, captured_s);
+                if let Some(log) = &mut timings {
+                    let done = crate::race_frame_timing::monotonic_s();
+                    log.record(serde_json::json!({"frame":frame,"capture_s":captured_s,"start_s":start,
+                        "done_s":done,"detected":obs.is_some()}));
+                }
                 if let Ok(mut s) = stats.lock() {
                     s.frames_read += 1;
                     if let Some(ref o) = obs {
@@ -873,14 +903,33 @@ pub fn spawn_worker(
                     break;
                 }
             }
-            thread::sleep(Duration::from_millis(15));
+            // The camera has already renamed the complete frame before notifying.
+            // A missed datagram or an older publisher still gets a timed poll.
+            if let Some(socket) = &wake {
+                if let Err(error) = socket.recv(&mut [0u8; 1])
+                    && !matches!(error.kind(), std::io::ErrorKind::WouldBlock
+                        | std::io::ErrorKind::TimedOut | std::io::ErrorKind::Interrupted)
+                {
+                    thread::sleep(interval);
+                }
+            } else {
+                thread::sleep(interval);
+            }
+        }
+        if wake.is_some() {
+            let _ = std::fs::remove_file(socket_path);
         }
         // The launcher owns these files until camera and lamp acquisition have stopped.
     })
 }
 
+pub(crate) fn wake_socket_path(frame: &Path) -> PathBuf {
+    frame.with_added_extension("cw.sock")
+}
+
 pub fn remove_shm_best_effort(path: &Path) -> std::io::Result<()> {
     let _ = std::fs::remove_file(path);
+    let _ = std::fs::remove_file(wake_socket_path(path));
     let mut tmp = path.as_os_str().to_os_string();
     tmp.push(".tmp");
     let _ = std::fs::remove_file(PathBuf::from(tmp));
@@ -944,6 +993,55 @@ mod tests {
         bgr
     }
 
+
+    #[test]
+    fn notified_and_unnotified_crosswalk_frames_are_processed_once() {
+        let dir = std::env::temp_dir().join(format!("xtcw-wake-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let shared = dir.join("frame");
+        let socket = wake_socket_path(&shared);
+        let sender = UnixDatagram::unbound().unwrap();
+        let stop = Arc::new(AtomicBool::new(false));
+        let stats = Arc::new(Mutex::new(RustCrosswalkStats::default()));
+        let hint = LaneLidarHint {
+            has_scan: true,
+            left_gap_x_m: Some(2.60),
+            ..Default::default()
+        };
+        let (tx, rx) = std::sync::mpsc::channel();
+        let worker = spawn_worker(shared.clone(), Arc::new(Mutex::new(hint)), stop.clone(), stats.clone(), tx);
+        let ready = Instant::now();
+        while !socket.exists() && ready.elapsed() < Duration::from_secs(2) {
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert!(socket.exists());
+        let pixels = make_court_scene(true, 1.80, true);
+        let mut bytes = vec![0; SHM_HEADER_LEN];
+        bytes[..4].copy_from_slice(SHM_MAGIC);
+        bytes[20..24].copy_from_slice(&640u32.to_le_bytes());
+        bytes[24..28].copy_from_slice(&480u32.to_le_bytes());
+        bytes.extend_from_slice(&pixels);
+        for (id, notify) in [(1i64, true), (2, false)] {
+            bytes[4..12].copy_from_slice(&id.to_le_bytes());
+            bytes[12..20].copy_from_slice(&(id as f64).to_le_bytes());
+            let tmp = dir.join("publishing");
+            std::fs::write(&tmp, &bytes).unwrap();
+            std::fs::rename(tmp, &shared).unwrap();
+            if notify {
+                sender.send_to(b"1", &socket).unwrap();
+                sender.send_to(b"1", &socket).unwrap();
+            }
+            let event = rx.recv_timeout(Duration::from_secs(2)).unwrap();
+            assert!(matches!(event, Event::RustCrosswalk(obs, _) if obs.frame == id));
+        }
+        stop.store(true, Ordering::Release);
+        let _ = sender.send_to(b"1", &socket);
+        worker.join().unwrap();
+        assert_eq!(stats.lock().unwrap().frames_read, 2);
+        assert!(!socket.exists());
+        remove_shm_best_effort(&shared).unwrap();
+        std::fs::remove_dir(dir).unwrap();
+    }
 
     #[test]
     fn retiring_crosswalk_worker_leaves_the_camera_frame_and_write_buffer() {

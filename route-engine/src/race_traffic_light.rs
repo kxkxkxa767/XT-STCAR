@@ -43,6 +43,7 @@ pub(crate) fn spawn(
         .name("rust-light".into())
         .spawn(move || {
             let pinned_cpu = pin_current_thread(3);
+            let mut timings = crate::race_frame_timing::FrameLog::open("localization-light-timing.jsonl");
             let socket_path = path.with_added_extension("lamp.sock");
             let mut wake = UnixDatagram::bind(&socket_path).ok();
             if wake
@@ -101,6 +102,7 @@ pub(crate) fn spawn(
                     continue;
                 };
                 last = Some(frame);
+                let started = timings.as_ref().map(|_| crate::race_frame_timing::monotonic_s());
                 let vis = crate::race_cam_features::extract_visual_frame(
                     pixels,
                     w,
@@ -108,9 +110,11 @@ pub(crate) fn spawn(
                     frame,
                     captured_mono_s,
                 );
+                let location_ready = timings.as_ref().map(|_| crate::race_frame_timing::monotonic_s());
                 if events.send(Event::RustCamLoc(Box::new(vis), Instant::now())).is_err() {
                     break;
                 }
+                let mut lamp_ready = None;
                 if mode == WorkerMode::LampAndLoc {
                     let start = Instant::now();
                     let lights = detector.detect(pixels, w, h);
@@ -123,9 +127,14 @@ pub(crate) fn spawn(
                         pinned_cpu,
                         compute_ms: start.elapsed().as_secs_f64() * 1000.,
                     };
+                    lamp_ready = timings.as_ref().map(|_| crate::race_frame_timing::monotonic_s());
                     if events.send(Event::RustLamp(obs, Instant::now())).is_err() {
                         break;
                     }
+                }
+                if let Some(log) = &mut timings {
+                    log.record(serde_json::json!({"frame":frame,"capture_s":captured_mono_s,"start_s":started,
+                        "location_done_s":location_ready,"lamp_done_s":lamp_ready}));
                 }
             }
             if wake.is_some() {

@@ -1,0 +1,12 @@
+[package]
+name = "xt-stcar-camera-jpeg"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+zune-core = "=0.5.3"
+zune-jpeg = "=0.5.15"
+
+[lints.rust]
+unsafe_code = "forbid"

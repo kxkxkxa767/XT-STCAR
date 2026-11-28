@@ -974,6 +974,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c3b93199df0ab874cdf0c6a94f0a0dc3423fe41f1cafb62b8bd7b1deb277aef"
 
 [[package]]
+name = "xt-stcar-camera-jpeg"
+version = "0.1.0"
+dependencies = [
+ "zune-core",
+ "zune-jpeg",
+]
+
+[[package]]
 name = "xt-stcar-device-io"
 version = "0.1.0"
 dependencies = [
@@ -999,10 +1007,9 @@ dependencies = [
  "rustix",
  "serde",
  "serde_json",
+ "xt-stcar-camera-jpeg",
  "xt-stcar-device-io",
  "xt-stcar-robot-core",
- "zune-core",
- "zune-jpeg",
 ]
 
 [[package]]

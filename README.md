@@ -24,11 +24,13 @@ Muse Pi Pro 上的 RISC-V 轻量无人车比赛工程。车载 Rust 程序 `rout
 
 每轮摆车、复位现场设备并取得本轮发车确认后，运行对应入口，例如 `start_2_7`。控制回路使用底盘 Guard、实测车身近障 8 cm 保护和终点端板测距回退。车载安装使用带 `ros2` 特性的 64 位 RISC-V ELF。[编号入口与安装说明](docs/numbered-race-start.md)
 
+11 月 28 日的 2 号版本为 K1 单独编译 JPEG 解码器。斑马线线程在相机发布完整画面后接收通知，用滑动窗口更新亮度和饱和度的四分位数。缺少通知时仍按定时器读取最新帧。`start_2_10 --check-only` 会在本次记录目录保存相机、斑马线及灯区的逐帧单调时钟时间戳。[2 号 RISC-V 程序与 SHA-256](https://github.com/kxkxkxa767/XT-STCAR/releases/tag/program2-k1-vision-20261128)
+
 11 月 24 日的视觉候选已用 7 轮赛场原图和 12 轮历史图像回放。识别结果与适用范围见[赛场灯珠验证](docs/rust-led-field-20261124.md)。
 
 ### 新候选的灯区行为
 
-灯架位于终点直道内侧隔板的开口，光电线在灯架上游 **1.00 m**。控制器用雷达几何估算前轮首次过线的时刻，从这个时刻开始倒计时。停车目标为车头距灯架约 **0.55 m**，给车尾越过入口线预留约 **0.06 m**。
+2 号以终点直道内侧隔板的开口定位车身，根据黑框下沿 **0.43 m**、上沿 **0.60 m** 的现场高度估算灯架相对开口的纵向偏移。光电线在实际灯架上游 **1.00 m**。前轮首次过线开始倒计时。缺少可用黑框时沿用已有的入口和门柱定位。停车目标为车头距灯架约 **0.55 m**，给车尾越过入口线预留约 **0.06 m**。
 
 即使灯具未触发或等灯秒数设为 0，车辆也要先进区停稳。过线后取得两帧新鲜有效绿灯，可在停稳后放行。一直未识别到有效绿灯时，倒计时到点后放行。[灯区控制实现](route-engine/src/maneuver_light.rs)
 
@@ -37,6 +39,8 @@ Muse Pi Pro 上的 RISC-V 轻量无人车比赛工程。车载 Rust 程序 `rout
 ## 本机构建与验证
 
 仓库使用 Rust 1.97.1。以下命令在工程根目录执行。控制台测试会调用本机的底盘桥、路线引擎和雷达几何程序。[Rust 工具链](rust-toolchain.toml) · [Mac 开发依赖](requirements-dev-macos.lock.txt)
+
+实车 ROS 2 交叉构建使用 `scripts/build-ros2-race.py`，传入板端 ROS sysroot 的 `--ros-prefix`、接口目录 `--interfaces` 和输出目录 `--out`。默认仅对相机 JPEG 解码调用及其两个 zune 依赖使用 `spacemit-x60`，控制程序使用通用目标。其他 RV64GC 硬件可在构建时选 `--jpeg-cpu generic`。
 
 ```bash
 cargo build --locked --bin vehicle-bridge

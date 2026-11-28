@@ -297,7 +297,11 @@ fn run_round(o: &Options, config: &Value) -> Result<()> {
         let t = Instant::now();
         // Acquisition and ROS startup run concurrently. A late/missing image only
         // removes camera evidence; it does not participate in race admission.
-        let camera_command = Command::new(std::env::current_exe()?)
+        let mut camera_command = Command::new(std::env::current_exe()?);
+        if o.check_only {
+            camera_command.env(crate::race_frame_timing::DIRECTORY, &out);
+        }
+        let camera_command = camera_command
             .arg("capture-camera").arg(camera).arg(&frame_shm).arg(out.join("vision"))
             .stdin(Stdio::null()).stdout(Stdio::piped())
             .stderr(File::create(out.join("vision-stderr.txt"))?).spawn();
@@ -350,6 +354,7 @@ fn run_round(o: &Options, config: &Value) -> Result<()> {
             ]);
         forward_wait(&mut command, o.light_max_wait_s);
         if o.check_only {
+            command.env(crate::race_frame_timing::DIRECTORY, &out);
             command.args(["--start", "never"]);
         } else {
             command.args(["--start", "ready", "--ready-hold-s", "3"]);

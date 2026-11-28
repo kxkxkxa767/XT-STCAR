@@ -8,15 +8,10 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use zune_core::{bytestream::ZCursor, colorspace::ColorSpace, options::DecoderOptions};
-use zune_jpeg::JpegDecoder;
+use xt_stcar_camera_jpeg::decode_bgr_640x480;
+use crate::race_frame_timing::{FrameLog, monotonic_s as monotonic};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-
-fn monotonic() -> f64 {
-    let t = rustix::time::clock_gettime(rustix::time::ClockId::Monotonic);
-    t.tv_sec as f64 + t.tv_nsec as f64 * 1e-9
-}
 
 fn stream(
     device: &str,
@@ -26,6 +21,7 @@ fn stream(
     id: &mut u64,
     save_all: bool,
     log: &mut BufWriter<File>,
+    timings: &mut Option<FrameLog>,
 ) -> Result<()> {
     let mut cam = rscam::Camera::new(device)?;
     cam.start(&rscam::Config {
@@ -36,7 +32,8 @@ fn stream(
     })?;
     let notify = UnixDatagram::unbound()?;
     notify.set_nonblocking(true)?;
-    let socket = shm.with_added_extension("lamp.sock");
+    let lamp_socket = shm.with_added_extension("lamp.sock");
+    let crosswalk_socket = crate::race_crosswalk_vision::wake_socket_path(shm);
     let temporary = shm.with_added_extension("tmp");
     let mut pixels = vec![0u8; 640 * 480 * 3];
     let mut last = f64::NEG_INFINITY;
@@ -54,17 +51,20 @@ fn stream(
             stamp
         };
         if dequeue - captured > 0.25 || captured - last < 0.074 {
+            if let Some(log) = timings {
+                let reason = if dequeue - captured > 0.25 { "stale" } else { "rate_limit" };
+                log.record(json!({"status":reason,"capture_s":captured,"driver_stamp_s":stamp,"dequeue_s":dequeue}));
+            }
             continue;
         }
-        let opts = DecoderOptions::default()
-            .jpeg_set_out_colorspace(ColorSpace::BGR)
-            .set_max_width(640)
-            .set_max_height(480);
-        let mut decoder = JpegDecoder::new_with_options(ZCursor::new(&frame[..]), opts);
-        if decoder.decode_headers().is_err()
-            || decoder.dimensions() != Some((640, 480))
-            || decoder.decode_into(&mut pixels).is_err()
-        {
+        let decode_start = timings.as_ref().map(|_| monotonic());
+        let decoded = decode_bgr_640x480(&frame[..], &mut pixels);
+        let decode_end = timings.as_ref().map(|_| monotonic());
+        if !decoded {
+            if let Some(log) = timings {
+                log.record(json!({"status":"decode_error","capture_s":captured,"driver_stamp_s":stamp,
+                    "dequeue_s":dequeue,"decode_start_s":decode_start,"decode_end_s":decode_end}));
+            }
             decode_errors += 1;
             if decode_errors == 8 {
                 return Err("camera repeatedly returned undecodable MJPEG".into());
@@ -86,7 +86,13 @@ fn stream(
             f.write_all(&pixels)?;
         }
         fs::rename(&temporary, shm)?;
-        let _ = notify.send_to(b"1", &socket);
+        let published = timings.as_ref().map(|_| monotonic());
+        let _ = notify.send_to(b"1", &lamp_socket);
+        let _ = notify.send_to(b"1", &crosswalk_socket);
+        if let Some(log) = timings {
+            log.record(json!({"status":"published","frame":*id,"capture_s":captured,"driver_stamp_s":stamp,
+                "dequeue_s":dequeue,"decode_start_s":decode_start,"decode_end_s":decode_end,"publish_s":published}));
+        }
         if *id == 1 {
             println!(
                 "{}",
@@ -121,6 +127,7 @@ pub fn main(args: &[String]) -> i32 {
     let run = || -> Result<()> {
         fs::create_dir_all(out.join("frames"))?;
         let mut log = BufWriter::new(File::create(out.join("frames.jsonl"))?);
+        let mut timings = FrameLog::open("camera-timing.jsonl");
         let stop = Arc::new(AtomicBool::new(false));
         #[cfg(feature = "ros2")]
         {
@@ -129,7 +136,7 @@ pub fn main(args: &[String]) -> i32 {
         }
         let mut id = 0;
         while !stop.load(Ordering::Acquire) {
-            if let Err(e) = stream(device, shm, out, &stop, &mut id, save_all, &mut log) {
+            if let Err(e) = stream(device, shm, out, &stop, &mut id, save_all, &mut log, &mut timings) {
                 eprintln!("camera {device}: {e}");
                 std::thread::sleep(Duration::from_millis(300));
             }

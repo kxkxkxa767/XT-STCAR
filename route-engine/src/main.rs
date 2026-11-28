@@ -30,6 +30,7 @@ pub mod py;
 pub mod race;
 #[cfg(target_os = "linux")]
 mod race_camera;
+mod race_frame_timing;
 mod race_launch;
 mod race_selection;
 pub mod race_scan;
